@@ -258,13 +258,24 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
     </div>
     <div class="card">
       <div class="opts" id="finOpts">
+        <label>つかいみち <select id="optUse"></select></label>
+        <label>ようし <select id="optPaper"></select></label>
         <label>むき <select id="optDir"><option value="yoko">よこがき</option><option value="tate">たてがき</option></select></label>
         <label>1ぎょうの もじ <select id="optCols"></select></label>
-        <label><input type="checkbox" id="optGrid" checked> ますめ</label>
-        <label><input type="checkbox" id="optName"> なまえを いれる</label>
+        <label>ぎょうすう <select id="optRows"></select></label>
+        <label>わく <select id="optGstyle"></select></label>
+        <label>もじの おおきさ <select id="optSize"><option value="0.6">ちいさめ</option><option value="0.72">ふつう</option><option value="0.85">おおきめ</option></select></label>
         <label id="lblFont">フォント <select id="optFont"></select></label>
         <label id="lblWeight">せんの ふとさ <select id="optWeight"><option value="0.05">ほそい</option><option value="0.075" selected>ふつう</option><option value="0.1">ふとい</option></select></label>
       </div>
+      <div class="opts" style="margin-top:8px">
+        <label>だい <input type="text" id="optTitle" placeholder="（なくても よい）" style="width:12em"></label>
+        <label><input type="checkbox" id="optName"> なまえを いれる</label>
+        <label><input type="checkbox" id="optSentBreak" checked> ぶんごとに かいぎょう</label>
+        <button class="btn small" id="btnBrMode">↵ かいぎょうを なおす</button>
+        <button class="btn small" id="btnBrReset">かいぎょうを もとに もどす</button>
+      </div>
+      <p class="hint" id="brHint" hidden>シートの もじを タップすると、その もじの まえで かいぎょうします（あかい せん）。もういちど タップすると もとに もどります。おわったら「↵ かいぎょうを なおす」を もういちど おします。</p>
       <div id="handTools" style="margin-top:12px">
         <div class="row"><button class="btn main" id="btnHandOpen">✏️ おおきな わくで かく</button><span class="hint" id="handPos2"></span></div>
         <p class="hint">したの シートの ますを タップすると、その もじから かけます。</p>
@@ -289,6 +300,7 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
       </div>
       <div class="missing" id="missingInfo"></div>
     </div>
+    <div class="row" id="pgNav" hidden style="justify-content:center"><button class="btn small" id="btnPgPrev">◀ まえの ページ</button><span id="pgLabel"></span><button class="btn small" id="btnPgNext">つぎの ページ ▶</button></div>
     <div class="sheetwrap"><canvas class="sheet" id="sheet"></canvas></div>
     <div class="row">
       <button class="btn main" id="btnSaveWork">💾 ほぞんする</button>
@@ -1004,44 +1016,79 @@ const FONTS = [
 ];
 const SMALL = 'ぁぃぅぇぉゃゅょっゎ';
 const PUNCT = '、。';
-const FIN_DEF = { hi: 0, mode: 'font', dir: 'yoko', cols: 10, grid: true, name: false, font: 0, weight: 0.075, model: true, penOnly: false };
+const FIN_DEF = { hi: 0, mode: 'font', dir: 'yoko', cols: 10, grid: true, name: false, font: 0, weight: 0.075, model: true, penOnly: false,
+  use: 'free', paper: 'free', rows: 0, gstyle: 'masu', size: 0.72, title: '', sentBreak: true, breaks: [], page: 0 };
 let fin = Object.assign({}, FIN_DEF);
+let brMode = false; // かいぎょうを なおす モード
 // ひとを かえたら、そのひとの しあげかた（フォント・むき など）に きりかえる
-function bindProfile() { fin = P().fin = Object.assign({}, FIN_DEF, P().fin); fin.hi = 0; }
+function bindProfile() {
+  fin = P().fin = Object.assign({}, FIN_DEF, P().fin); fin.hi = 0; fin.page = 0;
+  if (P().fin && P().fin.grid === false && !P().fin.gstyle) fin.gstyle = 'none';
+}
 const CELL = 80, MARGIN = 48;
+// ようし（pt：1pt＝1/72インチ）
+const PAPERS = {
+  free: { n: 'ようし なし（もじに あわせる）' },
+  a4t: { n: 'A4 たて', w: 595, h: 842 }, a4y: { n: 'A4 よこ', w: 842, h: 595 },
+  b5t: { n: 'B5 たて', w: 516, h: 729 }, b5y: { n: 'B5 よこ', w: 729, h: 516 },
+  hagaki: { n: 'はがき', w: 283, h: 420 }, tanzaku: { n: 'たんざく（6×18cm）', w: 170, h: 510 },
+};
+// つかいみち：えらぶと ようし・むき・もじすう・ぎょうすう・ますめ・もじの おおきさ が きまる
+const USES = {
+  free: { n: '✏️ じぶんで きめる' },
+  genko: { n: '📝 げんこうようし（たてがき 20×10）', paper: 'a4t', dir: 'tate', cols: 20, rows: 10, gstyle: 'genko', size: 0.72 },
+  sakubun: { n: '📄 さくぶん（よこがき ます）', paper: 'a4t', dir: 'yoko', cols: 15, rows: 20, gstyle: 'masu', size: 0.72 },
+  renraku: { n: '📒 れんらくちょう（けいせん）', paper: 'b5t', dir: 'yoko', cols: 18, rows: 12, gstyle: 'line', size: 0.72 },
+  keiji: { n: '📢 けいじぶつ（おおきな もじ）', paper: 'a4y', dir: 'yoko', cols: 8, rows: 4, gstyle: 'none', size: 0.85 },
+  card: { n: '💌 カード・はがき', paper: 'hagaki', dir: 'tate', cols: 10, rows: 7, gstyle: 'line', size: 0.72 },
+  tanzaku: { n: '🎋 たんざく', paper: 'tanzaku', dir: 'tate', cols: 12, rows: 2, gstyle: 'none', size: 0.85 },
+};
+const GSTYLES = { masu: 'ます', genko: 'げんこうようし', line: 'けいせん', none: 'なし' };
+const pitchOf = o => CELL * (o.gstyle === 'genko' ? 1.3 : o.gstyle === 'line' ? 1.2 : 1);
 
-function layoutLines(text, cols, name) {
-  const lines = [];
-  for (const para of text.split('\n')) {
+// もじを ぎょうに ならべる。からだの もじには 0,1,2… の ばんごう（n）、だい・なまえは n=-1
+function layoutAll(o, text) {
+  const cols = o.cols, lines = [], br = new Set(o.breaks || []);
+  const meta = s => [...s].slice(0, cols).map(ch => ({ ch, n: -1 }));
+  const nameLine = () => { const n = meta(P().name.trim()); return Array(cols - n.length).fill({ ch: ' ', n: -1 }).concat(n); };
+  if (o.title && o.title.trim()) lines.push(meta('  ' + o.title.trim()));
+  if (o.name && o.title && o.title.trim()) lines.push(nameLine());
+  const paras = o.sentBreak === false ? [text.replace(/\n/g, '')] : text.split('\n');
+  let n = 0;
+  for (const para of paras) {
     let line = [];
     for (const ch of para) {
+      const isSp = ch === ' ' || ch === '　';
+      if (!isSp && br.has(n) && line.length && !PUNCT.includes(ch)) { lines.push(line); line = []; }
       if (line.length >= cols) {
         // 行頭に「、。」がこないよう、ぶらさげる
-        if (PUNCT.includes(ch) && line.length === cols) { line.push(ch); lines.push(line); line = []; continue; }
+        if (PUNCT.includes(ch) && line.length === cols) { line.push({ ch, n: n++ }); lines.push(line); line = []; continue; }
         lines.push(line); line = [];
       }
-      line.push(ch);
+      line.push({ ch, n: isSp ? -1 : n++ });
     }
     lines.push(line);
   }
-  if (name && name.trim()) {
-    const n = [...name.trim()].slice(0, cols);
-    lines.push(Array(cols - n.length).fill(' ').concat(n));
-  }
+  if (o.name && !(o.title && o.title.trim())) lines.push(nameLine());
   return lines;
 }
-function sheetGeom(o, text) {
-  const lines = layoutLines(text, o.cols, o.name ? P().name : '');
-  const rows = Math.max(lines.length, 3);
-  const extra = CELL * 0.6;
+function sheetGeom(o, text, page = 0) {
+  const all = layoutAll(o, text);
+  const rows = o.rows > 0 ? o.rows : Math.max(all.length, 3);
+  const pages = Math.max(1, Math.ceil(all.length / rows));
+  const pg = Math.min(page, pages - 1);
+  const lines = all.slice(pg * rows, (pg + 1) * rows);
+  const P_ = pitchOf(o), off = (P_ - CELL) / 2, extra = CELL * 0.6;
   let W, H;
-  if (o.dir === 'yoko') { W = MARGIN * 2 + o.cols * CELL + extra; H = MARGIN * 2 + rows * CELL; }
-  else { W = MARGIN * 2 + rows * CELL; H = MARGIN * 2 + o.cols * CELL + extra; }
-  const cellXY = (r, c) => o.dir === 'yoko' ? [MARGIN + c * CELL, MARGIN + r * CELL] : [W - MARGIN - (r + 1) * CELL, MARGIN + c * CELL];
-  // もじの ある ます（くうはくは のぞく）に 0,1,2… と ばんごうを つける
+  if (o.dir === 'yoko') { W = MARGIN * 2 + o.cols * CELL + extra; H = MARGIN * 2 + rows * P_; }
+  else { W = MARGIN * 2 + rows * P_; H = MARGIN * 2 + o.cols * CELL + extra; }
+  const cellXY = (r, c) => o.dir === 'yoko' ? [MARGIN + c * CELL, MARGIN + r * P_ + off] : [W - MARGIN - (r + 1) * P_ + off, MARGIN + c * CELL];
   const cells = [];
-  lines.forEach((line, r) => line.forEach((ch, c) => { if (ch !== ' ' && ch !== '　') cells.push({ r, c, ch, n: cells.length }); }));
-  return { lines, rows, W, H, cellXY, cells };
+  lines.forEach((line, r) => line.forEach((x, c) => { if (x.ch !== ' ' && x.ch !== '　') cells.push({ r, c, ch: x.ch, n: x.n }); }));
+  // てがき用：ぜんぶの ページの からだの もじ（ページばんごう つき）
+  const allCells = [];
+  all.forEach((line, r) => line.forEach((x, c) => { if (x.n >= 0) allCells.push({ r: r % rows, c, ch: x.ch, n: x.n, page: Math.floor(r / rows) }); }));
+  return { lines, rows, pages, page: pg, W, H, P: P_, cellXY, cells, allCells };
 }
 // 1もじを ます に かく（たてがきの ときは 句読点・小さい字・ー を なおす）
 function drawCharCell(ctx, ch, x, y, o, painter) {
@@ -1054,106 +1101,159 @@ function drawCharCell(ctx, ch, x, y, o, painter) {
   painter(ctx, ch, x, y);
   ctx.restore();
 }
-function renderSheet(cv, o, text, opt = {}) {
-  const g = sheetGeom(o, text);
-  const scale = opt.scale || 2;
-  cv.width = Math.round(g.W * scale); cv.height = Math.round(g.H * scale);
-  const ctx = cv.getContext('2d');
-  ctx.setTransform(scale, 0, 0, scale, 0, 0);
-  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, g.W, g.H);
-  // ますめ
-  if (o.grid) {
-    ctx.strokeStyle = '#9bbcb6'; ctx.lineWidth = 1.5;
-    for (let r = 0; r < g.rows; r++) for (let c = 0; c < o.cols; c++) {
-      const [x, y] = g.cellXY(r, c); ctx.strokeRect(x, y, CELL, CELL);
+function drawGrid(ctx, g, o) {
+  const st = o.gstyle || (o.grid === false ? 'none' : 'masu');
+  ctx.strokeStyle = '#9bbcb6'; ctx.lineWidth = 1.5;
+  if (st === 'masu' || st === 'genko') {
+    for (let r = 0; r < g.rows; r++) for (let c = 0; c < o.cols; c++) { const [x, y] = g.cellXY(r, c); ctx.strokeRect(x, y, CELL, CELL); }
+    if (st === 'genko') {
+      ctx.lineWidth = 2.5;
+      if (o.dir === 'yoko') ctx.strokeRect(MARGIN - 6, MARGIN - 6, o.cols * CELL + 12, g.rows * g.P + 12);
+      else ctx.strokeRect(g.W - MARGIN - g.rows * g.P - 6, MARGIN - 6, g.rows * g.P + 12, o.cols * CELL + 12);
     }
-    if (o.mode === 'hand') {
-      ctx.save(); ctx.setLineDash([4, 6]); ctx.strokeStyle = '#d3e3e0'; ctx.lineWidth = 1;
-      for (let r = 0; r < g.rows; r++) for (let c = 0; c < o.cols; c++) {
-        const [x, y] = g.cellXY(r, c);
-        ctx.beginPath(); ctx.moveTo(x + CELL / 2, y + 4); ctx.lineTo(x + CELL / 2, y + CELL - 4); ctx.moveTo(x + 4, y + CELL / 2); ctx.lineTo(x + CELL - 4, y + CELL / 2); ctx.stroke();
-      }
-      ctx.restore();
+  } else if (st === 'line') {
+    ctx.beginPath();
+    for (let r = 0; r <= g.rows; r++) {
+      if (o.dir === 'yoko') { const y = MARGIN + r * g.P; ctx.moveTo(MARGIN, y); ctx.lineTo(MARGIN + o.cols * CELL, y); }
+      else { const x = g.W - MARGIN - r * g.P; ctx.moveTo(x, MARGIN); ctx.lineTo(x, MARGIN + o.cols * CELL); }
     }
+    ctx.stroke();
   }
+  if (o.mode === 'hand' && st !== 'none') {
+    ctx.save(); ctx.setLineDash([4, 6]); ctx.strokeStyle = '#d3e3e0'; ctx.lineWidth = 1;
+    for (let r = 0; r < g.rows; r++) for (let c = 0; c < o.cols; c++) {
+      const [x, y] = g.cellXY(r, c);
+      ctx.beginPath(); ctx.moveTo(x + CELL / 2, y + 4); ctx.lineTo(x + CELL / 2, y + CELL - 4); ctx.moveTo(x + 4, y + CELL / 2); ctx.lineTo(x + CELL - 4, y + CELL / 2); ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+// 1ページを かく。ようしが あれば、その おおきさの がめんの まんなかに おく
+function renderSheet(cv, o, text, opt = {}) {
+  const g = sheetGeom(o, text, opt.page || 0);
+  const pp = PAPERS[o.paper] && PAPERS[o.paper].w ? PAPERS[o.paper] : null;
+  const pw = pp ? pp.w : g.W, ph = pp ? pp.h : g.H, pm = pp ? 22 : 0;
+  const s = pp ? Math.min((pw - 2 * pm) / g.W, (ph - 2 * pm) / g.H) : 1;
+  const ox = (pw - g.W * s) / 2, oy = (ph - g.H * s) / 2;
+  const k = opt.scale || (pp ? 3 : 2);
+  cv.width = Math.round(pw * k); cv.height = Math.round(ph * k);
+  cv._pw = pp ? pw : 0; cv._ph = pp ? ph : 0;
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.setTransform(k * s, 0, 0, k * s, k * ox, k * oy);
+  drawGrid(ctx, g, o);
   const missing = new Set();
   const glyphs = opt.glyphs || P().glyphs;
+  const fs = CELL * (o.size || 0.72);
   const fontPaint = (family, color) => (c, ch, x, y) => {
-    c.fillStyle = color; c.font = `${CELL * 0.72}px ${family}`; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillStyle = color; c.font = `${fs}px ${family}`; c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillText(ch, x + CELL / 2, y + CELL / 2 + CELL * 0.03);
   };
+  const box = CELL * (o.size || 0.72) / 0.72 * 0.88, pad = (CELL - Math.min(box, CELL)) / 2;
+  const strokePaint = st => (c, _, x, y) => drawStrokes(c, st, x + pad, y + pad, Math.min(box, CELL), CELL * o.weight, '#1b1b1b');
   const glyphPaint = (c, ch, x, y) => {
     const gl = glyphs[ch];
-    if (gl && gl.length) drawStrokes(c, gl, x + CELL * 0.06, y + CELL * 0.06, CELL * 0.88, CELL * o.weight, '#1b1b1b');
+    if (gl && gl.length) strokePaint(gl)(c, ch, x, y);
     else { missing.add(ch); fontPaint('"Klee One",serif', '#c0c8c8')(c, ch, x, y); }
   };
-  if (o.mode === 'hand') {
-    const hand = opt.hand && !Array.isArray(opt.hand) ? opt.hand : {};
-    const model = fontPaint('"Klee One",serif', '#d9e0e0');
-    g.cells.forEach(({ r, c, ch, n }) => {
-      const [x, y] = g.cellXY(r, c);
-      if (opt.cur === n && !opt.exporting) { ctx.fillStyle = 'rgba(255,210,63,.45)'; ctx.fillRect(x + 1, y + 1, CELL - 2, CELL - 2); }
-      const h = hand[n];
-      if (h && h.ch === ch && h.s.length) drawCharCell(ctx, ch, x, y, o, (cx, _, xx, yy) => drawStrokes(cx, h.s, xx + CELL * 0.06, yy + CELL * 0.06, CELL * 0.88, CELL * o.weight, '#1b1b1b'));
-      else if (o.model && !opt.exporting) drawCharCell(ctx, ch, x, y, o, model);
-    });
-    // まえの かたち（シートに じかに かいた せん）
-    if (Array.isArray(opt.hand)) drawStrokes(ctx, opt.hand, 0, 0, 1, 6, '#1b1b1b');
-  } else {
-    const painter = o.mode === 'glyph' ? glyphPaint : fontPaint(FONTS[o.font][1], '#1b1b1b');
-    g.lines.forEach((line, r) => line.forEach((ch, c) => {
-      if (ch === ' ' || ch === '　') return;
-      const [x, y] = g.cellXY(r, c);
-      drawCharCell(ctx, ch, x, y, o, painter);
-    }));
-  }
-  return { geom: g, missing };
+  const hand = opt.hand && !Array.isArray(opt.hand) ? opt.hand : {};
+  const bodyPaint = o.mode === 'glyph' ? glyphPaint : o.mode === 'font' ? fontPaint(FONTS[o.font][1], '#1b1b1b') : null;
+  g.cells.forEach(({ r, c, ch, n }) => {
+    const [x, y] = g.cellXY(r, c);
+    if (opt.cur === n && n >= 0 && o.mode === 'hand' && !opt.exporting) { ctx.fillStyle = 'rgba(255,210,63,.45)'; ctx.fillRect(x + 1, y + 1, CELL - 2, CELL - 2); }
+    if (opt.brMode && n >= 0 && (o.breaks || []).includes(n)) {
+      ctx.fillStyle = '#d6534d';
+      if (o.dir === 'yoko') ctx.fillRect(x - 4, y, 4, CELL); else ctx.fillRect(x, y - 4, CELL, 4);
+    }
+    if (n < 0) { drawCharCell(ctx, ch, x, y, o, bodyPaint || fontPaint('"Klee One",serif', '#1b1b1b')); return; }
+    if (o.mode !== 'hand') { drawCharCell(ctx, ch, x, y, o, bodyPaint); return; }
+    const h = hand[n];
+    if (h && h.ch === ch && h.s.length) drawCharCell(ctx, ch, x, y, o, strokePaint(h.s));
+    else if (o.model && !opt.exporting) drawCharCell(ctx, ch, x, y, o, fontPaint('"Klee One",serif', '#d9e0e0'));
+  });
+  // まえの かたち（シートに じかに かいた せん）
+  if (o.mode === 'hand' && Array.isArray(opt.hand)) drawStrokes(ctx, opt.hand, 0, 0, 1, 6, '#1b1b1b');
+  return { geom: g, missing, xf: { ox, oy, s, pw, ph } };
+}
+// ぜんぶの ページを がぞうに する
+async function renderPages(o, text, hand, scale) {
+  if (o.mode === 'font') await ensureFont(FONTS[o.font][1]); else await ensureFont('"Klee One"');
+  const n = sheetGeom(o, text).pages, out = [];
+  for (let p = 0; p < n; p++) { const cv = document.createElement('canvas'); renderSheet(cv, o, text, { hand, exporting: true, page: p, scale }); out.push(cv); }
+  return out;
 }
 async function ensureFont(fam) { try { await document.fonts.load(`40px ${fam}`, 'あ'); } catch (e) {} }
 
 function finText() { return P().doc.join('\n'); }
 // てがき：ますの ばんごう → { ch: もじ, s: せん }
 function handChars() { if (!P().hand || Array.isArray(P().hand)) P().hand = {}; return P().hand; }
-let sheetGeomNow = null;
+let sheetGeomNow = null, sheetXf = null;
 async function drawFinish() {
   saveDB();
   const cv = $('#sheet');
   if (fin.mode === 'font') await ensureFont(FONTS[fin.font][1]);
   else await ensureFont('"Klee One"');
-  const res = renderSheet(cv, fin, finText(), { hand: handChars(), cur: fin.hi });
-  sheetGeomNow = res.geom;
+  const pp = PAPERS[fin.paper] && PAPERS[fin.paper].w;
+  const res = renderSheet(cv, fin, finText(), { hand: handChars(), cur: fin.hi, page: fin.page, brMode, scale: pp ? 2 : 2 });
+  sheetGeomNow = res.geom; sheetXf = res.xf;
+  fin.page = res.geom.page;
   const wrapW = $('.sheetwrap').clientWidth - 24;
-  const cssW = Math.min(res.geom.W, wrapW);
-  cv.style.width = cssW + 'px'; cv.style.height = (cssW * res.geom.H / res.geom.W) + 'px';
-  const mi = $('#missingInfo');
-  if (!finText()) mi.textContent = '①で ぶんを つくると ここに でます。';
-  else if (fin.mode === 'glyph' && res.missing.size) mi.textContent = 'まだ とうろくしていない もじ（うすく でています）：' + [...res.missing].join(' ') + '　→「もじとうろく」で かこう';
-  else mi.textContent = '';
+  const cssW = Math.min(res.xf.pw * (pp ? 1.6 : 1), wrapW);
+  cv.style.width = cssW + 'px'; cv.style.height = (cssW * res.xf.ph / res.xf.pw) + 'px';
+  $('#pgNav').hidden = res.geom.pages < 2;
+  $('#pgLabel').textContent = `${res.geom.page + 1} / ${res.geom.pages} ページ`;
+  $('#btnPgPrev').disabled = res.geom.page <= 0; $('#btnPgNext').disabled = res.geom.page >= res.geom.pages - 1;
+  const mi = $('#missingInfo'), msgs = [];
+  if (!finText()) msgs.push('①で ぶんを つくると ここに でます。');
+  if (fin.mode === 'glyph' && res.missing.size) msgs.push('まだ とうろくしていない もじ（うすく でています）：' + [...res.missing].join(' ') + '　→「もじとうろく」で かこう');
+  if (res.geom.pages > 1) msgs.push(`ぎょうすうに おさまらないので ${res.geom.pages}ページに なります（PDF では ぜんぶの ページが はいります）。`);
+  mi.textContent = msgs.join('　');
 }
 function renderFinish() {
   $$('.mode').forEach(b => b.classList.toggle('on', b.dataset.m === fin.mode));
   $('#handTools').hidden = fin.mode !== 'hand';
   $('#lblFont').hidden = fin.mode !== 'font';
   $('#lblWeight').hidden = fin.mode === 'font';
-  const cs = $('#optCols');
-  if (!cs.options.length) [6, 8, 10, 12, 15, 20].forEach(n => cs.append(el('option', { value: n }, n + 'もじ')));
-  const fs = $('#optFont');
-  if (!fs.options.length) FONTS.forEach((f, i) => fs.append(el('option', { value: i }, f[0])));
-  $('#optDir').value = fin.dir; cs.value = fin.cols; $('#optGrid').checked = fin.grid; $('#optName').checked = fin.name;
-  fs.value = fin.font; $('#optWeight').value = String(fin.weight); $('#optModel').checked = fin.model; $('#optPenOnly').checked = fin.penOnly;
+  const fill = (sel, items) => { const s = $(sel); if (!s.options.length) items.forEach(([v, t]) => s.append(el('option', { value: v }, t))); };
+  fill('#optUse', Object.entries(USES).map(([k, u]) => [k, u.n]));
+  fill('#optPaper', Object.entries(PAPERS).map(([k, p]) => [k, p.n]));
+  fill('#optCols', [4, 5, 6, 8, 10, 12, 14, 15, 16, 18, 20, 25].map(n => [n, n + 'もじ']));
+  fill('#optRows', [[0, 'じどう']].concat([1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 15, 20].map(n => [n, n + 'ぎょう'])));
+  fill('#optGstyle', Object.entries(GSTYLES));
+  fill('#optFont', FONTS.map((f, i) => [i, f[0]]));
+  [['#optUse', 'use'], ['#optPaper', 'paper'], ['#optDir', 'dir'], ['#optCols', 'cols'], ['#optRows', 'rows'], ['#optGstyle', 'gstyle'], ['#optSize', 'size'], ['#optFont', 'font'], ['#optWeight', 'weight']]
+    .forEach(([s, k]) => { $(s).value = String(fin[k]); });
+  $('#optName').checked = fin.name; $('#optSentBreak').checked = fin.sentBreak !== false;
+  $('#optTitle').value = fin.title || '';
+  $('#optModel').checked = fin.model; $('#optPenOnly').checked = fin.penOnly;
+  $('#btnBrMode').classList.toggle('on', brMode);
+  $('#brHint').hidden = !brMode;
   drawFinish(); renderWorks();
   if (fin.mode === 'hand') renderHandPad();
 }
 $$('.mode').forEach(b => b.addEventListener('click', () => { fin.mode = b.dataset.m; renderFinish(); }));
-[['#optDir', 'dir', v => v], ['#optCols', 'cols', v => +v], ['#optFont', 'font', v => +v], ['#optWeight', 'weight', v => +v]]
-  .forEach(([s, k, f]) => $(s).addEventListener('change', e => { fin[k] = f(e.target.value); drawFinish(); if (fin.mode === 'hand') renderHandPad(); }));
-[['#optGrid', 'grid'], ['#optName', 'name'], ['#optModel', 'model'], ['#optPenOnly', 'penOnly']]
-  .forEach(([s, k]) => $(s).addEventListener('change', e => { fin[k] = e.target.checked; drawFinish(); if (fin.mode === 'hand') renderHandPad(); }));
+const afterOpt = () => { drawFinish(); if (fin.mode === 'hand') renderHandPad(); };
+$('#optUse').addEventListener('change', e => {
+  fin.use = e.target.value;
+  const u = USES[fin.use];
+  ['paper', 'dir', 'cols', 'rows', 'gstyle', 'size'].forEach(k => { if (u[k] !== undefined) fin[k] = u[k]; });
+  fin.page = 0; renderFinish();
+});
+[['#optPaper', 'paper', v => v], ['#optDir', 'dir', v => v], ['#optCols', 'cols', v => +v], ['#optRows', 'rows', v => +v], ['#optGstyle', 'gstyle', v => v], ['#optSize', 'size', v => +v], ['#optFont', 'font', v => +v], ['#optWeight', 'weight', v => +v]]
+  .forEach(([s, k, f]) => $(s).addEventListener('change', e => { fin[k] = f(e.target.value); fin.page = 0; afterOpt(); }));
+[['#optName', 'name'], ['#optSentBreak', 'sentBreak'], ['#optModel', 'model'], ['#optPenOnly', 'penOnly']]
+  .forEach(([s, k]) => $(s).addEventListener('change', e => { fin[k] = e.target.checked; afterOpt(); }));
+$('#optTitle').addEventListener('input', e => { fin.title = normText(e.target.value); afterOpt(); });
+$('#btnBrMode').addEventListener('click', () => { brMode = !brMode; renderFinish(); });
+$('#btnBrReset').addEventListener('click', () => { fin.breaks = []; afterOpt(); toast('かいぎょうを もとに もどしました'); });
+$('#btnPgPrev').addEventListener('click', () => { fin.page--; drawFinish(); });
+$('#btnPgNext').addEventListener('click', () => { fin.page++; drawFinish(); });
 
 // てがき：1もじずつ かく パッド
 const PADN = 300;
 let padStrokes = [];
-const handCells = () => sheetGeom(fin, finText()).cells;
+const handCells = () => sheetGeom(fin, finText()).allCells;
 // わくを がめんに あわせて できるだけ おおきく する（ねばりを なくすため こまかい がそで）
 function fitBigCanvas(cv, reserve) {
   const size = Math.max(200, Math.floor(Math.min(window.innerWidth - 36, window.innerHeight - reserve - 30)));
@@ -1178,7 +1278,8 @@ function renderHandPad() {
   $('#handPos').textContent = $('#handPos2').textContent = `${fin.hi + 1}もじめ ／ ${cells.length}もじ（かいた もじ ${done}）`;
   // いま かいている ぎょうを みせる
   const ctx = $('#handCtx'); ctx.innerHTML = '';
-  cells.filter(c => c.r === cell.r).forEach(c => ctx.append(el('span', { class: c.n === fin.hi ? 'cur' : c.n < fin.hi ? 'dn' : '' }, c.ch)));
+  if (fin.page !== cell.page) { fin.page = cell.page; drawFinish(); }
+  cells.filter(c => c.page === cell.page && c.r === cell.r).forEach(c => ctx.append(el('span', { class: c.n === fin.hi ? 'cur' : c.n < fin.hi ? 'dn' : '' }, c.ch)));
   $('#btnHandPrev').disabled = fin.hi <= 0;
   paintPad();
 }
@@ -1230,22 +1331,25 @@ $('#btnHandClear').addEventListener('click', function () {
   P().hand = {}; fin.hi = 0; saveDB(); this.dataset.c = ''; this.textContent = 'ぜんぶ けす'; renderFinish();
 });
 // シートの ますを タップすると その もじへ
+// かいぎょうモードの ときは、タップした もじの まえで かいぎょう（もういちど タップで もとに もどる）
 $('#sheet').addEventListener('click', e => {
-  if (fin.mode !== 'hand' || !sheetGeomNow) return;
+  if (!sheetGeomNow || !sheetXf) return;
+  if (fin.mode !== 'hand' && !brMode) return;
   const r = e.currentTarget.getBoundingClientRect();
-  const x = (e.clientX - r.left) / r.width * sheetGeomNow.W, y = (e.clientY - r.top) / r.height * sheetGeomNow.H;
-  const hit = sheetGeomNow.cells.find(c => { const [cx, cy] = sheetGeomNow.cellXY(c.r, c.c); return x >= cx && x < cx + CELL && y >= cy && y < cy + CELL; });
-  if (hit) { savePad(); fin.hi = hit.n; openHandFull(true); }
+  const px = (e.clientX - r.left) / r.width * sheetXf.pw, py = (e.clientY - r.top) / r.height * sheetXf.ph;
+  const x = (px - sheetXf.ox) / sheetXf.s, y = (py - sheetXf.oy) / sheetXf.s;
+  const hit = sheetGeomNow.cells.find(c => { const [cx, cy] = sheetGeomNow.cellXY(c.r, c.c); return c.n >= 0 && x >= cx && x < cx + CELL && y >= cy && y < cy + CELL; });
+  if (!hit) return;
+  if (brMode) {
+    const b = new Set(fin.breaks || []);
+    b.has(hit.n) ? b.delete(hit.n) : b.add(hit.n);
+    fin.breaks = [...b].sort((a, z) => a - z); drawFinish(); return;
+  }
+  savePad(); fin.hi = hit.n; openHandFull(true);
 });
 window.addEventListener('resize', () => { if (currentView === 'finish') drawFinish(); });
 
 // がぞう・いんさつ・ほぞん
-async function exportPNG(o = fin, text = finText(), hand = handChars()) {
-  const cv = document.createElement('canvas');
-  if (o.mode === 'font') await ensureFont(FONTS[o.font][1]);
-  renderSheet(cv, o, text, { hand, exporting: true, scale: 2 });
-  return cv;
-}
 function openModal(...kids) {
   const m = el('div', { class: 'modal', onclick: e => { if (e.target === m) m.remove(); } }, el('div', { class: 'box' }, ...kids));
   document.body.append(m); return m;
@@ -1267,7 +1371,8 @@ function makePDF(cvs) {
   obj(1, () => push('<< /Type /Catalog /Pages 2 0 R >>'));
   obj(2, () => push(`<< /Type /Pages /Kids [${cvs.map((_, i) => `${3 + 3 * i} 0 R`).join(' ')}] /Count ${cvs.length} >>`));
   cvs.forEach((cv, i) => {
-    const land = cv.width > cv.height, PW = land ? 842 : 595, PH = land ? 595 : 842, M = 28;
+    // ようしが きまって いれば その おおきさの ページ、なければ A4 に おさめる
+    const land = cv.width > cv.height, PW = cv._pw || (land ? 842 : 595), PH = cv._ph || (land ? 595 : 842), M = cv._pw ? 0 : 28;
     const s = Math.min((PW - 2 * M) / cv.width, (PH - 2 * M) / cv.height);
     const w = cv.width * s, h = cv.height * s, x = (PW - w) / 2, y = (PH - h) / 2;
     const jpg = dataURLBytes(cv.toDataURL('image/jpeg', 0.92));
@@ -1321,19 +1426,18 @@ function openSendModal(cvs, base) {
 }
 $('#btnImage').addEventListener('click', async () => {
   if (!finText()) return toast('①で ぶんを つくってね');
-  openSendModal([await exportPNG()], fileBase());
+  openSendModal(await renderPages(fin, finText(), handChars()), fileBase());
 });
 $('#btnPrint').addEventListener('click', async () => {
   if (!finText()) return toast('①で ぶんを つくってね');
-  const cv = await exportPNG();
+  const cvs = await renderPages(fin, finText(), handChars());
   const pa = $('#printArea'); pa.innerHTML = '';
-  const img = el('img', { src: cv.toDataURL('image/png'), alt: '' });
-  pa.append(img);
-  img.onload = () => setTimeout(() => window.print(), 100);
+  cvs.forEach(cv => pa.append(el('img', { src: cv.toDataURL('image/png'), alt: '', style: 'page-break-after:always' })));
+  setTimeout(() => window.print(), 300);
 });
 $('#btnSaveWork').addEventListener('click', () => {
   if (!finText()) return toast('①で ぶんを つくってね');
-  const w = Object.assign({ id: 'w' + Date.now(), date: new Date().toISOString(), text: finText() }, fin);
+  const w = Object.assign({ id: 'w' + Date.now(), date: new Date().toISOString(), text: finText() }, JSON.parse(JSON.stringify(fin)));
   if (fin.mode === 'hand') w.hand = JSON.parse(JSON.stringify(handChars()));
   P().works.unshift(w);
   if (saveDB()) { toast('ほぞんしました'); renderWorks(); } else P().works.shift();
@@ -1344,7 +1448,7 @@ function updWorksBtn() { const n = P().works.filter(w => selWorks.has(w.id)).len
 $('#btnWorksPDF').addEventListener('click', async () => {
   const ws = P().works.filter(w => selWorks.has(w.id)); if (!ws.length) return;
   const cvs = [];
-  for (const w of ws) { if (w.mode === 'font') await ensureFont(FONTS[w.font][1]); const cv = document.createElement('canvas'); renderSheet(cv, w, w.text, { hand: w.hand, exporting: true, scale: 2 }); cvs.push(cv); }
+  for (const w of ws) cvs.push(...await renderPages(w, w.text, w.hand));
   openSendModal(cvs, fileBase() + '_まとめ');
 });
 $('#btnWorksAll').addEventListener('click', () => { const all = P().works.every(w => selWorks.has(w.id)); P().works.forEach(w => all ? selWorks.delete(w.id) : selWorks.add(w.id)); renderWorks(); });
@@ -1355,7 +1459,7 @@ function renderWorks() {
   if (!ws.length) { box.append(el('div', { class: 'hint' }, 'まだ ありません。')); return; }
   ws.forEach((w, i) => {
     const cv = document.createElement('canvas');
-    renderSheet(cv, w, w.text, { hand: w.hand, exporting: true, scale: 0.5 });
+    renderSheet(cv, w, w.text, { hand: w.hand, exporting: true, scale: PAPERS[w.paper] && PAPERS[w.paper].w ? 0.4 : 0.5 });
     const d = new Date(w.date);
     const del = el('button', { class: 'btn small warn' }, 'けす');
     del.addEventListener('click', () => {
@@ -1373,7 +1477,8 @@ function renderWorks() {
 }
 function openWork(w) {
   P().doc = w.text.split('\n');
-  ['mode', 'dir', 'cols', 'grid', 'name', 'font', 'weight'].forEach(k => { if (w[k] !== undefined) fin[k] = w[k]; });
+  Object.keys(FIN_DEF).forEach(k => { if (w[k] !== undefined && k !== 'hi') fin[k] = JSON.parse(JSON.stringify(w[k])); });
+  fin.page = 0;
   P().hand = w.hand && !Array.isArray(w.hand) ? JSON.parse(JSON.stringify(w.hand)) : {}; fin.hi = 0;
   saveDB(); renderFinish(); window.scrollTo(0, 0); toast('ひらきました');
 }
