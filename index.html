@@ -95,6 +95,11 @@ textarea.edit{width:100%;min-height:110px;padding:10px;border-radius:12px;border
 .key.space{flex:5 1 0;font-size:17px}
 .key.wide{flex:1.5 1 0}
 .key.next{background:var(--hl);box-shadow:0 0 0 4px #e0a800,0 2px 0 #8a9198;animation:pulse 1s ease-in-out infinite}
+.kkb{display:flex;gap:6px;justify-content:center}
+.kcol{display:flex;flex-direction:column;gap:6px;flex:1 1 0;min-width:0;max-width:84px}
+.kcol .key{flex:none;height:58px;width:100%;font-size:26px;font-family:var(--f-model)}
+.kcol .key.fn{font-size:17px;font-family:var(--f-ui)}
+.key.ghost{visibility:hidden;height:58px}
 .key.miss{background:#ffd3d0}
 .key.hit{transform:translateY(2px);box-shadow:none}
 @keyframes pulse{50%{transform:scale(1.06)}}
@@ -216,9 +221,10 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
     </div>
     <div class="kb" id="kb"></div>
     <div class="row" style="justify-content:center">
-      <label class="hint"><input type="checkbox" id="optFinger"> ゆびの いろ</label>
+      <label class="hint">うちかた <select id="optInput"><option value="kana">ひらがな（iPadの はいれつ）</option><option value="roma">ローマじ</option></select></label>
+      <label class="hint" id="lblFinger"><input type="checkbox" id="optFinger"> ゆびの いろ</label>
       <label class="hint">ガイド
-        <select id="optGuide"><option value="2">ローマじ＋キーを ひからせる</option><option value="1">ローマじだけ</option><option value="0">なし</option></select></label>
+        <select id="optGuide"><option value="2">ヒント＋キーを ひからせる</option><option value="1">ヒントだけ</option><option value="0">なし</option></select></label>
       <label class="hint"><input type="checkbox" id="optSound"> おと</label>
     </div>
   </section>
@@ -354,7 +360,7 @@ function loadDB() {
     const p = newProfile('ためしのひと');
     DB = { profiles: [p], current: p.id, settings: {} };
   }
-  DB.settings = Object.assign({ romaji: 'kunrei', guide: 2, finger: false, sound: true, keyCase: 'lower', glyphModel: true }, DB.settings);
+  DB.settings = Object.assign({ romaji: 'kunrei', guide: 2, finger: false, sound: true, keyCase: 'lower', glyphModel: true, input: 'kana' }, DB.settings);
 }
 function saveDB() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(DB)); return true; }
@@ -547,7 +553,7 @@ const K2 = {
 };
 // ヘボン式をガイドに出す字
 const HEP = { 'し':'shi','ち':'chi','つ':'tsu','ふ':'fu','じ':'ji','しゃ':'sha','しゅ':'shu','しょ':'sho','じゃ':'ja','じゅ':'ju','じょ':'jo','ちゃ':'cha','ちゅ':'chu','ちょ':'cho','しぇ':'she','ちぇ':'che','じぇ':'je' };
-const isTypable = c => c === '\n' || c in K1 || c === 'ん' || c === 'っ';
+const isTypable = c => KANA_MODE() ? (c === '\n' || KANA_KEYS.has(c) || !!kanaBase(c)) : (c === '\n' || c in K1 || c === 'ん' || c === 'っ');
 const splitC = s => s.split(' ');
 function candsOf(kana) {
   let list = [];
@@ -602,12 +608,14 @@ function buildUnits(text) {
 let ty = null;
 function startTyping() {
   const text = P().doc.join('\n');
-  ty = { units: buildUnits(text), ui: 0, buf: '', miss: 0, start: null, done: false, typed: [] };
+  ty = { units: KANA_MODE() ? buildKanaUnits(text) : buildUnits(text), ui: 0, buf: '', pend: null, miss: 0, start: null, done: false, typed: [] };
   skipAuto();
   renderTarget(); renderBig(); renderKB();
   $('#optFinger').checked = DB.settings.finger;
   $('#optGuide').value = String(DB.settings.guide);
   $('#optSound').checked = DB.settings.sound;
+  $('#optInput').value = DB.settings.input;
+  $('#lblFinger').hidden = KANA_MODE();
 }
 function skipAuto() { while (ty.ui < ty.units.length && ty.units[ty.ui].skip) ty.ui++; if (ty.ui >= ty.units.length) finishTyping(); }
 function curCands() { const u = ty.units[ty.ui]; return u ? u.cands.filter(c => c.startsWith(ty.buf)) : []; }
@@ -651,9 +659,10 @@ function renderTarget() {
     if (u.br) { tg.append(el('div', { style: 'flex-basis:100%;height:0' })); return; }
     const cls = 'unit' + (u.skip ? ' skip' : i < ty.ui ? ' done' : i === ty.ui ? ' now' : '');
     let r = '';
-    if (!u.skip && g > 0) r = i < ty.ui ? u.typed : u.cands[0];
+    if (KANA_MODE()) r = !u.skip && g > 0 && u.base !== u.kana ? u.base + '＋' + modMark(u) : '';
+    else if (!u.skip && g > 0) r = i < ty.ui ? u.typed : u.cands[0];
     const rEl = el('span', { class: 'r' });
-    if (i === ty.ui && g > 0) {
+    if (i === ty.ui && g > 0 && !KANA_MODE()) {
       const c = curCands()[0] || '';
       rEl.append(el('b', {}, ty.buf), c.slice(ty.buf.length));
     } else rEl.textContent = r;
@@ -674,6 +683,7 @@ function renderBig() {
   }
   const u = ty.units[ty.ui];
   if (!u) { b.append(el('div', { class: 'hint' }, '①で ぶんを つくってね')); return; }
+  if (KANA_MODE()) return renderBigKana(b, u);
   const c = curCands()[0] || '';
   const br = el('span', { class: 'br' });
   if (DB.settings.guide > 0) {
@@ -693,6 +703,7 @@ const KEY_SHOW = { '-':'ー', ',':'、', '.':'。', '!':'！', '?':'？', ' ':'�
 const keyLabel = k => KEY_SHOW[k] || (DB.settings.keyCase === 'upper' ? k.toUpperCase() : k);
 function renderKB() {
   const kb = $('#kb'); kb.innerHTML = '';
+  if (KANA_MODE()) return renderKanaKB(kb);
   const nk = DB.settings.guide === 2 && !ty.done ? nextKey() : null;
   KB_ROWS.forEach((row, ri) => {
     const r = el('div', { class: 'kr' });
@@ -710,7 +721,7 @@ function renderKB() {
 }
 function press(k) {
   if (!ty || ty.done) return;
-  const res = inputKey(k);
+  const res = KANA_MODE() ? inputKana(k) : inputKey(k);
   const keyEl = document.querySelector(`.key[data-k="${CSS.escape(k)}"]`);
   renderTarget(); renderBig(); renderKB();
   const k2 = document.querySelector(`.key[data-k="${CSS.escape(k)}"]`);
@@ -721,11 +732,97 @@ function press(k) {
 document.addEventListener('keydown', e => {
   if (currentView !== 'type' || e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.target.matches('input,textarea,select')) return;
+  if (KANA_MODE()) {
+    const kk = e.key === ' ' ? ' ' : e.key;
+    if (kk.length === 1 && (KANA_KEYS.has(kk) || kanaBase(kk))) { e.preventDefault(); typeKanaDirect(kk); }
+    return;
+  }
   let k = e.key.length === 1 ? e.key.toLowerCase() : null;
   const map = { 'ー':'-', '、':',', '。':'.', '！':'!', '？':'?', '　':' ' };
   if (map[k]) k = map[k];
   if (k && (FINGER[k] !== undefined || k === ' ')) { e.preventDefault(); press(k); }
 });
+
+// ===== ② ひらがな入力（iPad「日本語かな」配列） =====
+const KANA_MODE = () => DB.settings.input !== 'roma';
+// DOM は左から：左端が わ行・ー・小゛゜、右端が あ行（iPad と同じ向き）。いちばん右に くとうてん
+const KANA_COLS = [
+  ['わ', 'を', 'ん', 'ー', 'MOD'], ['ら', 'り', 'る', 'れ', 'ろ'], ['や', '', 'ゆ', '', 'よ'], ['ま', 'み', 'む', 'め', 'も'],
+  ['は', 'ひ', 'ふ', 'へ', 'ほ'], ['な', 'に', 'ぬ', 'ね', 'の'], ['た', 'ち', 'つ', 'て', 'と'], ['さ', 'し', 'す', 'せ', 'そ'],
+  ['か', 'き', 'く', 'け', 'こ'], ['あ', 'い', 'う', 'え', 'お'], ['、', '。', '？', '！', ''],
+];
+const KANA_KEYS = new Set(KANA_COLS.flat().filter(k => k && k !== 'MOD').concat([' ']));
+// 「小゛゜」キーを おすたびに かわる じゅんばん（例：は→ば→ぱ→は、つ→っ→づ→つ）
+const K_SMALL = { 'あ':'ぁ','い':'ぃ','う':'ぅ','え':'ぇ','お':'ぉ','つ':'っ','や':'ゃ','ゆ':'ゅ','よ':'ょ','わ':'ゎ' };
+const K_DAKU = { 'か':'が','き':'ぎ','く':'ぐ','け':'げ','こ':'ご','さ':'ざ','し':'じ','す':'ず','せ':'ぜ','そ':'ぞ','た':'だ','ち':'ぢ','つ':'づ','て':'で','と':'ど','は':'ば','ひ':'び','ふ':'ぶ','へ':'べ','ほ':'ぼ','う':'ゔ' };
+const K_HANDAKU = { 'は':'ぱ','ひ':'ぴ','ふ':'ぷ','へ':'ぺ','ほ':'ぽ' };
+const CYCLE = {};
+[...KANA_KEYS].forEach(b => { const l = [b]; [K_SMALL, K_DAKU, K_HANDAKU].forEach(m => { if (m[b]) l.push(m[b]); }); if (l.length > 1) CYCLE[b] = l; });
+const modMark = u => K_SMALL[u.base] === u.kana ? '小' : K_DAKU[u.base] === u.kana ? '゛' : '゜';
+const kanaBase = c => { for (const b in CYCLE) if (b !== c && CYCLE[b].includes(c)) return b; return null; };
+function buildKanaUnits(text) {
+  return [...text].map(c => {
+    if (c === '\n') return { kana: c, skip: true, br: true };
+    const k = c === '　' ? ' ' : c;
+    if (KANA_KEYS.has(k)) return { kana: c, base: k };
+    const b = kanaBase(c);
+    return b ? { kana: c, base: b } : { kana: c, skip: true };
+  });
+}
+function nextKeyKana() {
+  const u = ty.units[ty.ui]; if (!u || ty.done) return null;
+  if (u.base === u.kana || u.kana === '　') return u.base;
+  return ty.pend ? 'MOD' : u.base;
+}
+function inputKana(k) {
+  if (!ty || ty.done) return;
+  if (!ty.start) ty.start = Date.now();
+  const u = ty.units[ty.ui];
+  const done = () => { ty.pend = null; ty.units[ty.ui].typed = u.kana; ty.ui++; skipAuto(); beep(true); return 'ok'; };
+  if (k === 'MOD') {
+    if (!ty.pend) return 'none';
+    const l = CYCLE[u.base] || [u.base];
+    ty.pend = l[(l.indexOf(ty.pend) + 1) % l.length];
+    if (ty.pend === u.kana) return done();
+    beep(true); return 'ok';
+  }
+  if (k === u.kana || (k === ' ' && u.kana === '　')) return done();
+  if (k === u.base) { ty.pend = k; beep(true); return 'ok'; }
+  ty.miss++; beep(false); return 'ng';
+}
+// ハードウェアキーボードなどで「が」が そのまま きたときも そのまま せいかい
+const typeKanaDirect = c => press(c);
+function renderBigKana(b, u) {
+  const shown = ty.pend || u.kana;
+  b.append(el('span', { class: 'bk' }, kanaLabel(shown)));
+  if (DB.settings.guide === 0) return;
+  const seq = el('span', { class: 'br', style: 'font-size:34px;display:flex;gap:10px;align-items:center' });
+  const nk = nextKeyKana();
+  const key = (lab, on) => el('span', { class: on ? 'n' : '', style: 'border:2px solid var(--line);border-radius:10px;padding:2px 12px;background:' + (on ? 'var(--hl)' : '#fff') }, lab);
+  if (u.base === u.kana || u.kana === '　') seq.append(key(u.base === ' ' ? 'くうはく' : u.base, true));
+  else seq.append(key(u.base, nk === u.base), '→', key('小゛゜', nk === 'MOD'), el('span', { class: 'stat' }, ty.pend ? '（' + u.kana + ' に なるまで おす）' : ''));
+  b.append(seq);
+}
+function renderKanaKB(kb) {
+  const nk = DB.settings.guide === 2 ? nextKeyKana() : null;
+  const grid = el('div', { class: 'kkb' });
+  KANA_COLS.forEach(col => {
+    const c = el('div', { class: 'kcol' });
+    col.forEach(k => {
+      if (!k) { c.append(el('div', { class: 'key ghost' })); return; }
+      const lab = k === 'MOD' ? '小゛゜' : k;
+      const b = el('button', { class: 'key' + (k === 'MOD' ? ' fn' : '') + (k === nk ? ' next' : ''), 'data-k': k, 'aria-label': lab }, lab);
+      b.addEventListener('pointerdown', e => { e.preventDefault(); press(k); });
+      c.append(b);
+    });
+    grid.append(c);
+  });
+  kb.append(grid);
+  const sp = el('button', { class: 'key space' + (nk === ' ' ? ' next' : ''), 'data-k': ' ' }, 'くうはく');
+  sp.addEventListener('pointerdown', e => { e.preventDefault(); press(' '); });
+  kb.append(el('div', { class: 'kr' }, el('div', { style: 'flex:2 1 0' }), sp, el('div', { style: 'flex:2 1 0' })));
+}
+$('#optInput').addEventListener('change', e => { DB.settings.input = e.target.value; saveDB(); startTyping(); });
 $('#btnTypeRestart').addEventListener('click', startTyping);
 $('#btnSpeakNow').addEventListener('click', () => speak(P().doc.join('')));
 $('#optFinger').addEventListener('change', e => { DB.settings.finger = e.target.checked; saveDB(); renderKB(); });
