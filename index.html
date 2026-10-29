@@ -179,6 +179,10 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
 .cutbox{display:flex;flex-wrap:wrap;gap:4px;max-width:720px}
 .cutch{min-width:44px;min-height:52px;font-size:26px;font-family:var(--f-model);border:2px solid var(--line);border-radius:8px;background:#fff}
 .cutch.cut{border-right:6px solid var(--ng)}
+.showgrp{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin:6px 0 10px;font-size:16px}
+.showgrp b{min-width:9em}
+.wtog{min-height:40px;padding:4px 12px;border-radius:20px;border:2px solid var(--accent);background:var(--accent-soft);font-size:16px}
+.wtog.off{border-color:var(--line);background:#fff;color:#9aa;text-decoration:line-through}
 .app-version{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(8px + env(safe-area-inset-bottom,0px));font-size:.7rem;color:var(--ink);opacity:.35;pointer-events:none;z-index:5}
 @media (max-width:860px){nav.steps button{font-size:16px;gap:4px;padding:0 6px}nav.steps button .no{width:24px;height:24px}nav.steps button.tool{padding:0 10px}}
 @media (max-width:600px){.key{height:48px;font-size:20px}.bignow .bk{font-size:64px}.bignow .br{font-size:36px}.target .unit .k{font-size:26px}}
@@ -212,6 +216,7 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
     <div class="card">
       <h2>できた ぶん</h2>
       <div class="preview" id="sentPreview"></div>
+      <p class="hint" id="rereadHint" hidden style="font-size:17px">🔊 きいて たしかめよう。なおしたい ところは、うえの ことばを タップすると えらびなおせます。</p>
       <div class="row" style="margin-top:10px">
         <button class="btn" id="btnSpeak">🔊 よみあげる</button>
         <button class="btn main" id="btnAddSent">＋ このぶんを いれる</button>
@@ -372,6 +377,11 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
         </div>
         <p class="hint">もじ・ことば・ほぞんした ぶんしょうは、ひとごとに わかれて ほぞんされます。</p>
       </div>
+      <div class="card" style="grid-column:1/-1">
+        <h2>🧒 じどうせいとに みせるもの</h2>
+        <p class="hint">じどうせいと モードの ときだけ、ここで えらんだ ものが でます（せんせい モードでは ぜんぶ でます）。</p>
+        <div id="showBox"></div>
+      </div>
       <div class="card">
         <h2>よみあげ</h2>
         <label class="field" style="flex-direction:row;align-items:center"><input type="checkbox" id="optSpeakPick"> ことばを えらんだら こえで よむ</label>
@@ -481,7 +491,9 @@ function applyRole() {
   document.body.classList.toggle('student', st);
   $('#roleLb').textContent = st ? '🧒 じどうせいと' : '🧑‍🏫 せんせい';
   $('#whoName').textContent = P().name;
-  if (st && currentView === 'setting') show('make');
+  $('#steps button[data-v=glyph]').hidden = st && !SH().glyph;
+  if (st && (currentView === 'setting' || (currentView === 'glyph' && !SH().glyph))) show('make');
+  else if (currentView === 'make' || currentView === 'finish') show(currentView);
 }
 (() => {
   const b = $('#roleBtn'); let t = null;
@@ -515,9 +527,9 @@ function renderWho() {
 $('#whoSel').addEventListener('change', e => { DB.current = e.target.value; bindProfile(); saveDB(); show(currentView); toast(P().name + ' に かえました'); });
 
 // ===== よみあげ =====
-function speak(text) {
+function speak(text, append) {
   try {
-    speechSynthesis.cancel();
+    if (!append) speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'ja-JP'; u.rate = 0.85;
     speechSynthesis.speak(u);
@@ -592,9 +604,16 @@ function sentenceComplete() {
   if (t.id === 'jiyu') return mk.free.trim().length > 0;
   return t.parts.every((p, i) => p[0] !== '@' || mk.vals[i]);
 }
+// じどうせいと モードの ときだけ、せんせいが えらんだ ものに しぼる
+const isStudent = () => DB.role === 'student';
+const SHOW_DEF = { tpls: null, modes: null, glyph: true, hide: {}, max: 0 };
+const SH = () => S().show = Object.assign({}, SHOW_DEF, S().show);
+function shownTpls() { const l = SH().tpls; return isStudent() && l && l.length ? TPLS.filter(t => l.includes(t.id)) : TPLS; }
 function renderMake() {
   const tl = $('#tplList'); tl.innerHTML = '';
-  TPLS.forEach(t => tl.append(el('button', { class: 'tpl' + (t.id === mk.tpl ? ' on' : ''), onclick: () => { mk = P().mk = { tpl: t.id, vals: {}, active: null, free: '' }; saveDB(); renderMake(); } },
+  const tpls = shownTpls();
+  if (!tpls.some(t => t.id === mk.tpl)) { mk = P().mk = { tpl: tpls[0].id, vals: {}, active: null, free: '' }; }
+  tpls.forEach(t => tl.append(el('button', { class: 'tpl' + (t.id === mk.tpl ? ' on' : ''), onclick: () => { mk = P().mk = { tpl: t.id, vals: {}, active: null, free: '' }; saveDB(); renderMake(); } },
     el('span', { class: 'em' }, t.em), t.name)));
   renderFrame(); renderDoc();
 }
@@ -635,6 +654,8 @@ function renderChooser(key, idx) {
     const next = t.parts.findIndex((p, i) => p[0] === '@' && !mk.vals[i]);
     mk.active = next >= 0 ? next : null;
     renderFrame();
+    // ぜんぶ えらべたら ぶんを よみあげて、よみかえしを うながす
+    if (next < 0 && S().speakPick) speak(sentenceText(), true);
   };
   let words = slot.w;
   if (key === 'gend' || key === 'tend') {
@@ -649,9 +670,15 @@ function renderChooser(key, idx) {
       words = key === 'gend' ? [['がんばりました。', '💪']] : [['がんばりたいです。', '💪']];
     }
   }
+  let mineW = (P().words[key] || []);
+  if (isStudent()) {
+    const hide = SH().hide[key] || [];
+    words = words.filter(([w]) => !hide.includes(w)); mineW = mineW.filter(w => !hide.includes(w));
+    if (SH().max > 0) { words = words.slice(0, SH().max); mineW = mineW.slice(0, Math.max(0, SH().max - words.length)); }
+  }
   words.forEach(([w, em]) => box.append(el('button', { class: 'chip', onclick: () => pick(w) }, el('span', { class: 'em' }, em), w)));
   const mine = (P().words[key] || []);
-  mine.forEach(w => {
+  mineW.forEach(w => {
     box.append(el('button', { class: 'chip mine', onclick: () => pick(w) }, w));
     box.append(el('button', { class: 'btn small warn tonly', 'aria-label': w + ' を けす', onclick: () => { P().words[key] = mine.filter(x => x !== w); saveDB(); renderChooser(key, idx); } }, '✕'));
   });
@@ -671,6 +698,8 @@ function renderChooser(key, idx) {
 function renderPreview() {
   P().mk = mk;
   const t = TPLS.find(t => t.id === mk.tpl);
+  $('#rereadHint').hidden = !(sentenceComplete() && t.id !== 'jiyu');
+  $('#btnAddSent').textContent = mk.editIdx != null ? '✓ なおした ぶんに する' : '＋ このぶんを いれる';
   const s = t.id === 'jiyu' ? sentenceText() : t.parts.map((p, i) => partText(p, i, t, '〇〇')).join('');
   $('#sentPreview').textContent = s || '（ことばを えらぶと ここに でます）';
   $('#btnAddSent').disabled = !sentenceComplete();
@@ -680,20 +709,31 @@ function renderDoc() {
   if (!p.doc.length) dl.append(el('div', { class: 'hint' }, 'まだ ありません。うえで ぶんを つくって「このぶんを いれる」を おしてね。'));
   p.doc.forEach((s, i) => dl.append(el('div', { class: 'docline' }, el('span', {}, s),
     el('button', { class: 'btn small', 'aria-label': 'よむ', onclick: () => speak(s) }, '🔊'),
-    el('button', { class: 'btn small warn tonly', onclick: () => { p.doc.splice(i, 1); saveDB(); renderDoc(); } }, '✕'))));
+    (p.docSrc || {})[s] ? el('button', { class: 'btn small', onclick: () => editLine(i) }, '✏️ なおす') : '',
+    el('button', { class: 'btn small warn tonly', onclick: () => { p.doc.splice(i, 1); if (mk.editIdx != null) delete mk.editIdx; saveDB(); renderDoc(); renderPreview(); } }, '✕'))));
   $('#docEdit').value = p.doc.join('\n');
   const bad = [...new Set(p.doc.join('').split('').filter(c => !isTypable(c)))];
   $('#docWarn').textContent = bad.length ? '※ うてない もじが あります：' + bad.join(' ') + '（タイピングでは とばします）' : '';
   $('#goType').disabled = !p.doc.length;
 }
+// できた ぶんを よびだして、ことばを えらびなおす
+function editLine(i) {
+  const s = P().doc[i], src = (P().docSrc || {})[s]; if (!src) return;
+  mk = P().mk = { tpl: src.tpl, vals: Object.assign({}, src.vals), active: null, free: '', editIdx: i };
+  renderMake(); window.scrollTo(0, 0);
+  speak(s); toast('なおしたい ことばを タップしてね');
+}
 $('#btnSpeak').addEventListener('click', () => speak(sentenceText()));
 $('#btnAddSent').addEventListener('click', () => {
   if (!sentenceComplete()) return;
-  P().doc.push(sentenceText()); saveDB();
-  mk.vals = {}; mk.active = null; mk.free = '';
+  const s = sentenceText(), t = TPLS.find(t => t.id === mk.tpl);
+  // あとで ことばを えらびなおせるよう、つくりかたを おぼえておく
+  if (t.id !== 'jiyu') (P().docSrc = P().docSrc || {})[s] = { tpl: mk.tpl, vals: Object.assign({}, mk.vals) };
+  if (mk.editIdx != null && mk.editIdx < P().doc.length) P().doc[mk.editIdx] = s; else P().doc.push(s);
+  mk.vals = {}; mk.active = null; mk.free = ''; delete mk.editIdx;
   renderFrame(); renderDoc(); if (saveDB()) toast('いれました！');
 });
-$('#btnClearSlots').addEventListener('click', () => { mk.vals = {}; mk.active = null; mk.free = ''; renderFrame(); });
+$('#btnClearSlots').addEventListener('click', () => { mk.vals = {}; mk.active = null; mk.free = ''; delete mk.editIdx; renderFrame(); });
 $('#btnApplyEdit').addEventListener('click', () => {
   P().doc = $('#docEdit').value.split('\n').map(s => normText(s.trim())).filter(Boolean); renderDoc(); if (saveDB()) toast('なおしました');
 });
@@ -1360,7 +1400,9 @@ async function drawFinish() {
   mi.textContent = msgs.join('　');
 }
 function renderFinish() {
-  $$('.mode').forEach(b => b.classList.toggle('on', b.dataset.m === fin.mode));
+  const modesOk = isStudent() && SH().modes && SH().modes.length ? SH().modes : ['glyph', 'font', 'hand'];
+  if (!modesOk.includes(fin.mode)) fin.mode = modesOk[0];
+  $$('.mode').forEach(b => { b.hidden = !modesOk.includes(b.dataset.m); b.classList.toggle('on', b.dataset.m === fin.mode); });
   $('#handTools').hidden = fin.mode !== 'hand';
   $('#lblFont').hidden = fin.mode !== 'font';
   $('#lblWeight').hidden = fin.mode === 'font';
@@ -1754,7 +1796,34 @@ function openReg(ch, queue) {
 }
 
 // ===== せってい =====
+function renderShowBox() {
+  const sh = SH(), box = $('#showBox'); box.innerHTML = '';
+  const grp = (label, ...kids) => el('div', { class: 'showgrp' }, el('b', {}, label), ...kids);
+  const cb = (on, text, fn) => { const i = el('input', { type: 'checkbox' }); i.checked = on; i.addEventListener('change', () => { fn(i.checked); saveDB(); }); return el('label', {}, i, ' ' + text); };
+  const listToggle = (key, all, id, on) => { let l = sh[key] && sh[key].length ? sh[key].slice() : all.slice(); if (on) l.push(id); else l = l.filter(x => x !== id); sh[key] = l.length === all.length ? null : l; };
+  const tIds = TPLS.map(t => t.id);
+  box.append(grp('ぶんの かた', ...TPLS.map(t => cb(!sh.tpls || sh.tpls.includes(t.id), t.em + t.name, on => listToggle('tpls', tIds, t.id, on)))));
+  const mIds = ['glyph', 'font', 'hand'], mName = { glyph: 'じぶんの もじ', font: 'iPadの もじ', hand: 'てがき' };
+  box.append(grp('しあげかた', ...mIds.map(m => cb(!sh.modes || sh.modes.includes(m), mName[m], on => listToggle('modes', mIds, m, on))), cb(sh.glyph, 'もじとうろくの ボタン', on => { sh.glyph = on; })));
+  const maxSel = el('select', { 'aria-label': 'ことばの かず' });
+  [[0, 'ぜんぶ'], [2, '2こ'], [3, '3こ'], [4, '4こ'], [6, '6こ']].forEach(([v, t]) => maxSel.append(el('option', { value: v }, t)));
+  maxSel.value = String(sh.max); maxSel.addEventListener('change', () => { sh.max = +maxSel.value; saveDB(); });
+  box.append(grp('ことばの かず', maxSel, el('span', { class: 'hint' }, '（1かいに だす ことばの かず。うえから じゅんに でます）')));
+  const det = el('details', {}, el('summary', { class: 'hint' }, 'だす ことばを えらぶ（タップで だす／かくす）'));
+  Object.entries(SLOTS).forEach(([k, s]) => {
+    const all = s.w.map(x => x[0]).concat(P().words[k] || []);
+    if (!all.length) return;
+    det.append(grp(s.q, ...all.map(w => {
+      const hide = () => sh.hide[k] || [];
+      const b = el('button', { class: 'wtog' + (hide().includes(w) ? ' off' : '') }, w);
+      b.addEventListener('click', () => { const h = hide(); sh.hide[k] = h.includes(w) ? h.filter(x => x !== w) : h.concat(w); b.classList.toggle('off'); saveDB(); });
+      return b;
+    })));
+  });
+  box.append(det);
+}
 function renderSetting() {
+  renderShowBox();
   $('#profName').value = P().name;
   $('#optRomaji').value = S().romaji;
   $('#optCase').value = S().keyCase;
