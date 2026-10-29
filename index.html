@@ -22,6 +22,15 @@
 }
 *{box-sizing:border-box}
 [hidden]{display:none!important}
+/* じどうせいと モードでは せんせい用の ボタンを かくす */
+body.student .tonly{display:none!important}
+body:not(.student) .sonly{display:none!important}
+.rolebtn{position:relative;overflow:hidden;min-height:46px;padding:6px 14px;border-radius:24px;border:2px solid var(--accent);background:var(--card);font-weight:700;font-size:16px}
+.rolebtn .fill{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--hl);z-index:0}
+.rolebtn.press .fill{width:100%;transition:width 1.2s linear}
+.rolebtn .lb{position:relative;z-index:1}
+.tcard{border-style:dashed}
+.tcard>h2::before{content:"🧑‍🏫 ";}
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:18px;
   -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;
@@ -53,7 +62,7 @@ section.view{display:flex;flex-direction:column;gap:16px}
 .btn.on{background:var(--accent-soft);border-color:var(--accent)}
 .btn:disabled{opacity:.4}
 /* ① ぶんをつくる */
-.tpl-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.tpl-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
 .tpl{min-height:72px;border:2px solid var(--line);border-radius:14px;background:var(--card);padding:8px 12px;text-align:left;display:flex;gap:10px;align-items:center;font-weight:700}
 .tpl .em{font-size:30px}
 .tpl.on{border-color:var(--accent);background:var(--accent-soft)}
@@ -170,7 +179,8 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
 
 <header class="top">
   <h1>文章メーカー</h1>
-  <div class="who">つかうひと <select id="whoSel" aria-label="つかうひと"></select></div>
+  <div class="who"><span class="tonly">つかうひと</span> <select id="whoSel" class="tonly" aria-label="つかうひと"></select><b class="sonly" id="whoName"></b>
+    <button class="rolebtn" id="roleBtn" aria-label="ながおしで せんせい／じどうせいと を きりかえ"><span class="fill"></span><span class="lb" id="roleLb"></span></button></div>
 </header>
 <nav class="steps" id="steps">
   <button data-v="make"><span class="no">1</span>ぶんをつくる</button>
@@ -178,7 +188,7 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
   <button data-v="finish"><span class="no">3</span>しあげる</button>
   <span class="sep"></span>
   <button data-v="glyph" class="tool">✏️ もじとうろく</button>
-  <button data-v="setting" class="tool">⚙ せってい</button>
+  <button data-v="setting" class="tool tonly">⚙ せってい</button>
 </nav>
 <main>
   <!-- ① ぶんをつくる -->
@@ -204,7 +214,7 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
     <div class="card">
       <h2>ぶんしょう（ぜんぶ）</h2>
       <div class="doclist" id="docList"></div>
-      <details style="margin-top:10px">
+      <details class="tonly" style="margin-top:10px">
         <summary class="hint">せんせい：ちょくせつ なおす</summary>
         <textarea class="edit" id="docEdit" aria-label="ぶんしょうを なおす"></textarea>
         <div class="row"><button class="btn small" id="btnApplyEdit">なおしを はんえい</button><span class="hint">カタカナは ひらがなに かわります</span></div>
@@ -213,7 +223,7 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
       <div class="row" style="margin-top:12px">
         <button class="btn main" id="goType">つぎへ：うってみる ▶</button>
         <button class="btn" id="btnSpeakAll">🔊 ぜんぶ よむ</button>
-        <button class="btn small warn" id="btnClearDoc">ぜんぶ けす</button>
+        <button class="btn small warn tonly" id="btnClearDoc">ぜんぶ けす</button>
       </div>
     </div>
   </section>
@@ -235,7 +245,9 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
       <div class="bignow" id="bigNow"></div>
     </div>
     <div class="kb" id="kb"></div>
-    <div class="row" style="justify-content:center">
+    <div class="card tcard tonly">
+      <h2>うちかたの せってい</h2>
+      <div class="opts">
       <label class="hint">うちかた <select id="optInput"><option value="kana">ひらがな（iPadの はいれつ）</option><option value="roma">ローマじ</option></select></label>
       <label class="hint" id="lblFinger"><input type="checkbox" id="optFinger"> ゆびの いろ</label>
       <label class="hint">ガイド
@@ -243,6 +255,7 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
       <label class="hint">くぎり <select id="optChunk"><option value="auto">1ぶん（ながい ときは「、」まで）</option><option value="ten">いつも「、」「。」まで</option><option value="sent">1ぶんずつ</option><option value="all">ぜんぶ いっきに</option></select></label>
       <label class="hint"><input type="checkbox" id="optBig"> 1もじを おおきく だす</label>
       <label class="hint"><input type="checkbox" id="optSound"> おと</label>
+      </div>
     </div>
   </section>
 
@@ -256,7 +269,8 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
         <button class="mode" data-m="hand">🖊 てがき<small>ゆび・ペンで かく</small></button>
       </div>
     </div>
-    <div class="card">
+    <div class="card tcard tonly">
+      <h2>しあげかた（ようし・もじすう・かいぎょう）</h2>
       <div class="opts" id="finOpts">
         <label>つかいみち <select id="optUse"></select></label>
         <label>ようし <select id="optPaper"></select></label>
@@ -276,6 +290,8 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
         <button class="btn small" id="btnBrReset">かいぎょうを もとに もどす</button>
       </div>
       <p class="hint" id="brHint" hidden>シートの もじを タップすると、その もじの まえで かいぎょうします（あかい せん）。もういちど タップすると もとに もどります。おわったら「↵ かいぎょうを なおす」を もういちど おします。</p>
+    </div>
+    <div class="card">
       <div id="handTools" style="margin-top:12px">
         <div class="row"><button class="btn main" id="btnHandOpen">✏️ おおきな わくで かく</button><span class="hint" id="handPos2"></span></div>
         <p class="hint">したの シートの ますを タップすると、その もじから かけます。</p>
@@ -288,10 +304,10 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
               <button class="btn" id="btnHandUndo">↶ もどす</button>
               <button class="btn" id="btnHandErase">この もじを けす</button>
               <button class="btn" id="btnHandSpeak">🔊</button>
-              <label class="hint"><input type="checkbox" id="optModel" checked> おてほん</label>
-              <label class="hint"><input type="checkbox" id="optPenOnly"> ペンだけ</label>
+              <label class="hint tonly"><input type="checkbox" id="optModel" checked> おてほん</label>
+              <label class="hint tonly"><input type="checkbox" id="optPenOnly"> ペンだけ</label>
               <button class="btn" id="btnHandClose">✓ おわる</button>
-              <button class="btn small warn" id="btnHandClear">ぜんぶ けす</button>
+              <button class="btn small warn tonly" id="btnHandClear">ぜんぶ けす</button>
             </div>
             <div class="hctx" id="handCtx"></div>
           </div>
@@ -299,17 +315,17 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
         </div>
       </div>
       <div class="missing" id="missingInfo"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn main" id="btnSaveWork">💾 ほぞんする</button>
+        <button class="btn tonly" id="btnImage">📤 パソコンへ おくる（PDF・がぞう）</button>
+        <button class="btn tonly" id="btnPrint" hidden>🖨 いんさつ</button>
+      </div>
     </div>
     <div class="row" id="pgNav" hidden style="justify-content:center"><button class="btn small" id="btnPgPrev">◀ まえの ページ</button><span id="pgLabel"></span><button class="btn small" id="btnPgNext">つぎの ページ ▶</button></div>
     <div class="sheetwrap"><canvas class="sheet" id="sheet"></canvas></div>
-    <div class="row">
-      <button class="btn main" id="btnSaveWork">💾 ほぞんする</button>
-      <button class="btn" id="btnImage">📤 パソコンへ おくる（PDF・がぞう）</button>
-      <button class="btn" id="btnPrint" hidden>🖨 いんさつ</button>
-    </div>
     <div class="card">
       <h2>ほぞんした ぶんしょう</h2>
-      <div class="row" style="margin-bottom:10px">
+      <div class="row tonly" style="margin-bottom:10px">
         <button class="btn small" id="btnWorksAll">ぜんぶ えらぶ／はずす</button>
         <button class="btn small main" id="btnWorksPDF" disabled>📤 えらんだ 0こを PDF に まとめて おくる</button>
       </div>
@@ -324,7 +340,7 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
       <p class="hint">もじを タップして、わくの なかに かきます。とうろくした もじは「しあげる」で つかえます。</p>
       <div class="row"><span class="prog" id="glyphProg"></span>
         <button class="btn small" id="btnGlyphNext">まだの もじから はじめる</button>
-        <label class="hint"><input type="checkbox" id="optGlyphModel" checked> おてほんを うすく だす</label></div>
+        <label class="hint tonly"><input type="checkbox" id="optGlyphModel" checked> おてほんを うすく だす</label></div>
     </div>
     <div class="card"><div class="glyphs" id="glyphGrid"></div></div>
   </section>
@@ -434,10 +450,32 @@ function show(v) {
 }
 $$('#steps button').forEach(b => b.addEventListener('click', () => show(b.dataset.v)));
 
+// せんせい／じどうせいと モード：こどもが まちがえて かえないよう、ながおし（1.2びょう）で きりかえ
+function applyRole() {
+  const st = DB.role === 'student';
+  document.body.classList.toggle('student', st);
+  $('#roleLb').textContent = st ? '🧒 じどうせいと' : '🧑‍🏫 せんせい';
+  $('#whoName').textContent = P().name;
+  if (st && currentView === 'setting') show('make');
+}
+(() => {
+  const b = $('#roleBtn'); let t = null;
+  const cancel = () => { clearTimeout(t); t = null; b.classList.remove('press'); };
+  b.addEventListener('pointerdown', e => {
+    e.preventDefault(); b.classList.add('press');
+    t = setTimeout(() => {
+      cancel(); DB.role = DB.role === 'student' ? 'teacher' : 'student'; saveDB(); applyRole();
+      toast(DB.role === 'student' ? 'じどうせいと モードに しました' : 'せんせい モードに しました');
+    }, 1200);
+  });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => { if (t) { cancel(); toast('ながおし すると きりかわります'); } }));
+  b.addEventListener('contextmenu', e => e.preventDefault());
+})();
 function renderWho() {
   const s = $('#whoSel'); s.innerHTML = '';
   DB.profiles.forEach(p => s.append(el('option', { value: p.id }, p.name)));
   s.value = DB.current;
+  $('#whoName').textContent = P().name;
 }
 $('#whoSel').addEventListener('change', e => { DB.current = e.target.value; bindProfile(); saveDB(); show(currentView); toast(P().name + ' に かえました'); });
 
@@ -562,14 +600,14 @@ function renderChooser(key, idx) {
   const mine = (P().words[key] || []);
   mine.forEach(w => {
     box.append(el('button', { class: 'chip mine', onclick: () => pick(w) }, w));
-    box.append(el('button', { class: 'btn small warn', 'aria-label': w + ' を けす', onclick: () => { P().words[key] = mine.filter(x => x !== w); saveDB(); renderChooser(key, idx); } }, '✕'));
+    box.append(el('button', { class: 'btn small warn tonly', 'aria-label': w + ' を けす', onclick: () => { P().words[key] = mine.filter(x => x !== w); saveDB(); renderChooser(key, idx); } }, '✕'));
   });
   ch.append(box);
   const inp = el('input', { type: 'text', placeholder: 'あたらしい ことば', 'aria-label': 'あたらしい ことば', style: 'padding:10px;border-radius:10px;border:2px solid var(--line);flex:1;min-width:0' });
   // 「なにを」には、そのことばに あう うごきも えらぶ
   const vsel = el('select', { 'aria-label': 'どうする', style: 'padding:10px;border-radius:10px;border:2px solid var(--line);background:#fff' });
   Object.entries(VERBS).forEach(([k, v]) => vsel.append(el('option', { value: k }, '〜を ' + v.n)));
-  ch.append(el('div', { class: 'row', style: 'margin-top:10px' }, inp, key === 'nani' ? vsel : '',
+  ch.append(el('div', { class: 'row tonly', style: 'margin-top:10px' }, inp, key === 'nani' ? vsel : '',
     el('button', { class: 'btn small', onclick: () => {
       const w = normText(inp.value.trim()); if (!w) return;
       (P().words[key] = P().words[key] || []).push(w);
@@ -588,7 +626,7 @@ function renderDoc() {
   if (!p.doc.length) dl.append(el('div', { class: 'hint' }, 'まだ ありません。うえで ぶんを つくって「このぶんを いれる」を おしてね。'));
   p.doc.forEach((s, i) => dl.append(el('div', { class: 'docline' }, el('span', {}, s),
     el('button', { class: 'btn small', 'aria-label': 'よむ', onclick: () => speak(s) }, '🔊'),
-    el('button', { class: 'btn small warn', onclick: () => { p.doc.splice(i, 1); saveDB(); renderDoc(); } }, '✕'))));
+    el('button', { class: 'btn small warn tonly', onclick: () => { p.doc.splice(i, 1); saveDB(); renderDoc(); } }, '✕'))));
   $('#docEdit').value = p.doc.join('\n');
   const bad = [...new Set(p.doc.join('').split('').filter(c => !isTypable(c)))];
   $('#docWarn').textContent = bad.length ? '※ うてない もじが あります：' + bad.join(' ') + '（タイピングでは とばします）' : '';
@@ -1461,7 +1499,7 @@ function renderWorks() {
     const cv = document.createElement('canvas');
     renderSheet(cv, w, w.text, { hand: w.hand, exporting: true, scale: PAPERS[w.paper] && PAPERS[w.paper].w ? 0.4 : 0.5 });
     const d = new Date(w.date);
-    const del = el('button', { class: 'btn small warn' }, 'けす');
+    const del = el('button', { class: 'btn small warn tonly' }, 'けす');
     del.addEventListener('click', () => {
       if (del.dataset.c !== '1') { del.dataset.c = '1'; del.textContent = 'ほんとう？'; setTimeout(() => { del.dataset.c = ''; del.textContent = 'けす'; }, 3000); return; }
       ws.splice(i, 1); saveDB(); renderWorks();
@@ -1469,7 +1507,7 @@ function renderWorks() {
     const pickCb = el('input', { type: 'checkbox', 'aria-label': 'えらぶ' });
     pickCb.checked = selWorks.has(w.id);
     pickCb.addEventListener('change', () => { pickCb.checked ? selWorks.add(w.id) : selWorks.delete(w.id); updWorksBtn(); });
-    box.append(el('div', { class: 'work' }, el('label', { class: 'hint' }, pickCb, ' えらぶ'), cv,
+    box.append(el('div', { class: 'work' }, el('label', { class: 'hint tonly' }, pickCb, ' えらぶ'), cv,
       el('div', { class: 'meta' }, `${d.getMonth() + 1}がつ${d.getDate()}にち ・ ${MODE_NAME[w.mode]}`),
       el('div', { class: 'row' },
         el('button', { class: 'btn small', onclick: () => openWork(w) }, 'ひらく'), del)));
@@ -1557,8 +1595,8 @@ function openReg(ch) {
       el('button', { class: 'btn', onclick: () => { strokes.pop(); paint(); } }, '↶ もどす'),
       el('button', { class: 'btn', onclick: () => { strokes = []; paint(); } }, 'この もじを けす'),
       el('button', { class: 'btn', onclick: () => speak(ch) }, '🔊'),
-      el('label', { class: 'hint' }, modelCb, ' おてほん'),
-      el('label', { class: 'hint' }, penCb, ' ペンだけ'),
+      el('label', { class: 'hint tonly' }, modelCb, ' おてほん'),
+      el('label', { class: 'hint tonly' }, penCb, ' ペンだけ'),
       el('button', { class: 'btn', onclick: () => { save(); m.remove(); renderGlyphGrid(); } }, '✓ おわる')));
   const m = openModal(bar, cv);
   m.onclick = null;
@@ -1621,6 +1659,7 @@ loadDB();
 bindProfile();
 $('#btnPrint').hidden = IN_FRAME;
 renderWho();
+applyRole();
 show('make');
 </script>
 </body>
