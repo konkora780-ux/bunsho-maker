@@ -142,6 +142,7 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
 .gcell{width:64px;height:76px;border:2px solid var(--line);border-radius:10px;background:#fff;padding:2px;display:flex;flex-direction:column;align-items:center;justify-content:space-between}
 .gcell canvas{width:44px;height:44px}
 .gcell .lb{font-size:15px;color:var(--sub);font-family:var(--f-model)}
+.gcell.need{border-color:var(--hl);box-shadow:0 0 0 3px var(--hl)}
 .gcell.has{border-color:var(--accent);background:#f2faf8}
 .prog{font-size:16px;color:var(--sub)}
 /* モーダル */
@@ -333,6 +334,10 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
     <div class="sheetwrap"><canvas class="sheet" id="sheet"></canvas></div>
     <div class="card">
       <h2>ほぞんした ぶんしょう</h2>
+      <div class="row" id="draftRow" hidden style="margin-bottom:10px;background:#fff7d6;border-radius:10px;padding:8px 10px">
+        <span class="hint" id="draftInfo"></span>
+        <button class="btn small" id="btnDraft">↩ したがきに もどす</button>
+      </div>
       <div class="row tonly" style="margin-bottom:10px">
         <button class="btn small" id="btnWorksAll">ぜんぶ えらぶ／はずす</button>
         <button class="btn small main" id="btnWorksPDF" disabled>📤 えらんだ 0こを PDF に まとめて おくる</button>
@@ -347,6 +352,7 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
       <h2>じぶんの もじを とうろくしよう</h2>
       <p class="hint">もじを タップして、わくの なかに かきます。とうろくした もじは「しあげる」で つかえます。</p>
       <div class="row"><span class="prog" id="glyphProg"></span>
+        <button class="btn main" id="btnGlyphNeed" hidden>📝 いまの ぶんしょうの もじから かく</button>
         <button class="btn small" id="btnGlyphNext">まだの もじから はじめる</button>
         <label class="hint tonly"><input type="checkbox" id="optGlyphModel" checked> おてほんを うすく だす</label></div>
     </div>
@@ -525,12 +531,12 @@ const SLOTS = {
   nani: { q: 'なにを？', w: [['かけっこ', '🏃', 'suru', ['で', 'はしれる']], ['だんす', '💃', 'odoru'], ['うた', '🎤', 'utau'], ['がっき', '🥁', 'ensou'], ['そうじ', '🧹', 'suru'], ['きゅうしょく', '🍛', 'taberu'], ['けいさん', '🔢', 'suru'], ['ひらがな', '✍️', 'kaku'], ['え', '🎨', 'kaku'], ['ほん', '📖', 'yomu'], ['しごと', '💼', 'suru'], ['おりがみ', '🦢', 'oru'], ['りょうり', '🍳', 'tsukuru']] },
   how: { q: 'どのように？', w: [['いっしょうけんめい', '🔥'], ['さいごまで', '🏁'], ['ともだちときょうりょくして', '🤝'], ['おおきなこえで', '📣'], ['ていねいに', '✨'], ['ひとりで', '☝️'], ['えがおで', '😄']] },
   dare: { q: 'だれと？', w: [['ともだち', '🧒'], ['せんせい', '🧑‍🏫'], ['かぞく', '👪'], ['くらすのみんな', '👫']] },
-  feel: { q: 'きもちは？', w: [['とてもたのしかったです。', '😆'], ['うれしかったです。', '😊'], ['またやりたいです。', '🔁'], ['どきどきしました。', '💓'], ['がんばってよかったです。', '👍']] },
+  feel: { q: 'きもちは？', w: [['とてもたのしかったです。', '😆'], ['うれしかったです。', '😊'], ['またやりたいです。', '🔁'], ['どきどきしました。', '💓'], ['がんばってよかったです。', '👍'], ['むずかしかったです。', '😣'], ['こまりました。', '😥'], ['てつだってほしいです。', '🙋']] },
   how2: { q: 'どのくらい？', w: [['じょうずに', '👏'], ['はやく', '⚡'], ['ひとりで', '☝️'], ['ながく', '⏳'], ['たくさん', '🔢']] },
   // 「がんばったこと」「つぎに」の ぶんまつ：えらんだ「なにを」に あわせて かわる（renderChooser で つくる）
   gend: { q: 'どうした？', w: [] },
   tend: { q: 'どうしたい？', w: [] },
-  feel2: { q: 'どうおもった？', w: [['たのしい', '😆'], ['うれしい', '😊'], ['もっとがんばりたい', '🔥'], ['すごい', '😲']] },
+  feel2: { q: 'どうおもった？', w: [['たのしい', '😆'], ['うれしい', '😊'], ['もっとがんばりたい', '🔥'], ['すごい', '😲'], ['むずかしい', '😣'], ['こまった', '😥'], ['てつだってほしい', '🙋']] },
 };
 // うごきの かたち（した・して・できる）
 const VERBS = {
@@ -1607,6 +1613,9 @@ $('#btnWorksPDF').addEventListener('click', async () => {
 $('#btnWorksAll').addEventListener('click', () => { const all = P().works.every(w => selWorks.has(w.id)); P().works.forEach(w => all ? selWorks.delete(w.id) : selWorks.add(w.id)); renderWorks(); });
 function renderWorks() {
   const box = $('#works'); box.innerHTML = '';
+  const d = P().draft;
+  $('#draftRow').hidden = !d;
+  if (d) { const t = new Date(d.date); $('#draftInfo').textContent = `したがき（${t.getMonth() + 1}/${t.getDate()} ${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')}）：${(d.doc.join('') || '（てがきだけ）').slice(0, 20)}…`; }
   const ws = P().works;
   updWorksBtn();
   if (!ws.length) { box.append(el('div', { class: 'hint' }, 'まだ ありません。')); return; }
@@ -1629,12 +1638,26 @@ function renderWorks() {
   });
 }
 function openWork(w) {
+  // ひらく まえに、いまの ないようを したがきに のこす（あとで もどせる）
+  if (P().doc.length || Object.keys(handChars()).length) {
+    P().draft = { date: new Date().toISOString(), doc: P().doc.slice(), hand: JSON.parse(JSON.stringify(handChars())), fin: JSON.parse(JSON.stringify(fin)) };
+  }
   P().doc = w.text.split('\n');
   Object.keys(FIN_DEF).forEach(k => { if (w[k] !== undefined && k !== 'hi') fin[k] = JSON.parse(JSON.stringify(w[k])); });
   fin.page = 0;
   P().hand = w.hand && !Array.isArray(w.hand) ? JSON.parse(JSON.stringify(w.hand)) : {}; fin.hi = 0;
-  renderFinish(); window.scrollTo(0, 0); if (saveDB()) toast('ひらきました');
+  renderFinish(); window.scrollTo(0, 0); if (saveDB()) toast(P().draft ? 'ひらきました（まえの ないようは したがきに のこしました）' : 'ひらきました');
 }
+function restoreDraft() {
+  const d = P().draft; if (!d) return;
+  // いまの ないようと いれかえる（もういちど おすと もとに もどる）
+  const now = { date: new Date().toISOString(), doc: P().doc.slice(), hand: JSON.parse(JSON.stringify(handChars())), fin: JSON.parse(JSON.stringify(fin)) };
+  P().doc = d.doc; P().hand = d.hand;
+  Object.keys(FIN_DEF).forEach(k => { if (d.fin[k] !== undefined) fin[k] = d.fin[k]; });
+  fin.page = 0; fin.hi = 0; P().draft = now;
+  renderFinish(); if (saveDB()) toast('したがきに もどしました');
+}
+$('#btnDraft').addEventListener('click', restoreDraft);
 
 // ===== もじとうろく =====
 const GLYPH_ROWS = ['あいうえお', 'かきくけこ', 'さしすせそ', 'たちつてと', 'なにぬねの', 'はひふへほ', 'まみむめも', 'やゆよ', 'らりるれろ', 'わをん',
@@ -1646,14 +1669,19 @@ function drawGlyphThumb(cv, ch) {
   const gl = P().glyphs[ch];
   if (gl) drawStrokes(c, gl, 2, 2, n - 4, (n - 4) * 0.075, '#1b1b1b');
 }
+// いまの ぶんしょうで つかう のに、まだ とうろく していない もじ（でてくる じゅん）
+function neededGlyphs() { return [...new Set([...P().doc.join('')].filter(c => GLYPH_ALL.includes(c) && !P().glyphs[c]))]; }
 function renderGlyphGrid() {
   const g = $('#glyphGrid'); g.innerHTML = '';
+  const need = neededGlyphs();
+  $('#btnGlyphNeed').hidden = !need.length;
+  $('#btnGlyphNeed').textContent = `📝 いまの ぶんしょうの もじから かく（あと ${need.length}もじ）`;
   GLYPH_ROWS.forEach(row => {
     const r = el('div', { class: 'grow' });
     row.split('').forEach(ch => {
       const cv = document.createElement('canvas');
       drawGlyphThumb(cv, ch);
-      r.append(el('button', { class: 'gcell' + (P().glyphs[ch] ? ' has' : ''), 'aria-label': ch + ' を かく', onclick: () => openReg(ch) }, el('span', { class: 'lb' }, ch), cv));
+      r.append(el('button', { class: 'gcell' + (P().glyphs[ch] ? ' has' : '') + (need.includes(ch) ? ' need' : ''), 'aria-label': ch + ' を かく', onclick: () => openReg(ch) }, el('span', { class: 'lb' }, ch), cv));
     });
     g.append(r);
   });
@@ -1662,8 +1690,11 @@ function renderGlyphGrid() {
   $('#optGlyphModel').checked = S().glyphModel;
 }
 $('#optGlyphModel').addEventListener('change', e => { S().glyphModel = e.target.checked; saveDB(); });
+$('#btnGlyphNeed').addEventListener('click', () => { const q = neededGlyphs(); if (q.length) openReg(q[0], q); });
 $('#btnGlyphNext').addEventListener('click', () => { const c = GLYPH_ALL.find(c => !P().glyphs[c]); if (c) openReg(c); else toast('ぜんぶ とうろくできています！'); });
-function openReg(ch) {
+// queue が あれば その もじだけを じゅんに かく（いまの ぶんしょうで つかう もじ など）
+function openReg(ch, queue) {
+  const list = queue || GLYPH_ALL;
   let strokes = (P().glyphs[ch] || []).map(s => s.slice());
   const N = 300;
   const cv = el('canvas', { class: 'regcv' });
@@ -1688,12 +1719,12 @@ function openReg(ch) {
     onDraw: pts => paint(pts),
     onEnd: pts => { strokes.push(simplify(pts, 0.006)); paint(); },
   });
-  const idx = GLYPH_ALL.indexOf(ch);
+  const idx = list.indexOf(ch);
   const save = () => {
     if (strokes.length) P().glyphs[ch] = strokes; else delete P().glyphs[ch];
     saveDB();
   };
-  const go = d => { save(); m.remove(); const n = GLYPH_ALL[idx + d]; if (n) openReg(n); else { renderGlyphGrid(); toast('おわり！'); } };
+  const go = d => { save(); m.remove(); const n = list[idx + d]; if (n) openReg(n, queue); else { renderGlyphGrid(); toast(queue ? 'いまの ぶんしょうの もじが ぜんぶ かけたね！' : 'おわり！'); } };
   const prevBtn = el('button', { class: 'btn', onclick: () => go(-1) }, '◀ まえ');
   prevBtn.disabled = idx <= 0;
   const note = SMALL.includes(ch) ? 'ちいさく かこう' : PUNCT.includes(ch) ? 'ひだりしたに ちいさく かこう' : '';
@@ -1703,7 +1734,7 @@ function openReg(ch) {
   const penCb = el('input', { type: 'checkbox' }); penCb.checked = fin.penOnly;
   penCb.addEventListener('change', () => { fin.penOnly = penCb.checked; });
   const bar = el('div', { class: 'padbar' },
-    el('div', { class: 'regtitle' }, el('span', { class: 'ch' }, ch), el('span', { class: 'hint' }, `${idx + 1}もじめ ／ ${GLYPH_ALL.length}もじ${note ? '　' + note : ''}`)),
+    el('div', { class: 'regtitle' }, el('span', { class: 'ch' }, ch), el('span', { class: 'hint' }, `${idx + 1}もじめ ／ ${list.length}もじ${queue ? '（いまの ぶんしょうの もじ）' : ''}${note ? '　' + note : ''}`)),
     el('div', { class: 'row' },
       prevBtn,
       el('button', { class: 'btn main', onclick: () => go(1) }, 'かけた！ つぎへ ▶'),
