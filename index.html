@@ -33,7 +33,7 @@ body:not(.student) .sonly{display:none!important}
 .tcard>h2::before{content:"🧑‍🏫 ";}
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:18px;
-  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;
+  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 input,textarea,select{font-family:inherit;font-size:18px;-webkit-user-select:text;user-select:text}
 button{font-family:inherit;font-size:18px;color:var(--ink);cursor:pointer;touch-action:manipulation}
@@ -43,12 +43,12 @@ header.top h1{margin:0;font-size:26px;letter-spacing:.06em;color:var(--accent)}
 header.top .who{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:16px;color:var(--sub)}
 header.top select{padding:6px 10px;border-radius:10px;border:2px solid var(--line);background:var(--card);color:var(--ink)}
 nav.steps{display:flex;flex-wrap:wrap;gap:8px;padding-bottom:12px}
-nav.steps button{flex:1 1 140px;min-height:56px;border:2px solid var(--line);background:var(--card);border-radius:14px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px}
+nav.steps button{flex:1 1 120px;white-space:nowrap;min-height:56px;border:2px solid var(--line);background:var(--card);border-radius:14px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px}
 nav.steps button .no{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--accent-soft);color:var(--accent)}
 nav.steps button.on{background:var(--accent);border-color:var(--accent);color:#fff}
 nav.steps button.on .no{background:#fff;color:var(--accent)}
 nav.steps .sep{flex:0 0 8px}
-nav.steps button.tool{flex:0 1 150px;font-size:16px}
+nav.steps button.tool{flex:0 1 auto;padding:0 14px;font-size:16px}
 main{padding-bottom:40px}
 section.view{display:flex;flex-direction:column;gap:16px}
 .card{background:var(--card);border:2px solid var(--line);border-radius:16px;padding:16px}
@@ -169,11 +169,13 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
 .field select,.field input{padding:8px;border-radius:10px;border:2px solid var(--line);background:#fff}
 @media print{
   body{background:#fff;padding:0}
-  header.top,nav.steps,main>*:not(#printArea){display:none!important}
+  header.top,nav.steps,main>*:not(#printArea),.app-version{display:none!important}
   #printArea{display:block!important}
   #printArea img{width:100%;height:auto}
 }
 #printArea{display:none}
+.app-version{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(8px + env(safe-area-inset-bottom,0px));font-size:.7rem;color:var(--ink);opacity:.35;pointer-events:none;z-index:5}
+@media (max-width:860px){nav.steps button{font-size:16px;gap:4px;padding:0 6px}nav.steps button .no{width:24px;height:24px}nav.steps button.tool{padding:0 10px}}
 @media (max-width:600px){.key{height:48px;font-size:20px}.bignow .bk{font-size:64px}.bignow .br{font-size:36px}.target .unit .k{font-size:26px}}
 </style>
 
@@ -377,7 +379,7 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
           <button class="btn small" id="btnCopyExport">コピー</button>
           <button class="btn small" id="btnDownload" hidden>ファイルに ほぞん</button>
         </div>
-        <textarea class="edit" id="exportBox" style="font-size:12px;font-family:monospace;min-height:80px" aria-label="バックアップコード"></textarea>
+        <textarea class="edit" id="exportBox" style="font-size:16px;font-family:monospace;min-height:80px" aria-label="バックアップコード"></textarea>
         <div class="row">
           <button class="btn small" id="btnImport">はりつけた コードを よみこむ</button>
           <label class="btn small" style="display:inline-flex;align-items:center">ファイルから<input type="file" id="fileImport" accept=".json,application/json,text/plain" hidden></label>
@@ -387,6 +389,8 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
   </section>
   <div id="printArea"></div>
 </main>
+<!-- 更新日: アプリを直したら、ここの日付を書きかえる（最新版が反映されたかの目印。せんせいモードだけ表示） -->
+<div class="app-version tonly">更新日 2026-10-30</div>
 
 <script>
 // ===== 共通 =====
@@ -1454,7 +1458,11 @@ function openSendModal(cvs, base) {
     return;
   }
   btns.append(el('button', { class: 'btn main', onclick: () => sendFile(pdf) }, '📤 PDF で おくる'));
+  // iPad は キャンバスの メモリが すくないので、つかいおわったら すぐ かいほう する
+  const release = () => cvs.forEach(c => { c.width = c.height = 0; });
+  if (cvs.length !== 1) release();
   if (cvs.length === 1) cvs[0].toBlob(blob => {
+    release();
     const png = new File([blob], base + '.png', { type: 'image/png' });
     btns.insertBefore(el('button', { class: 'btn', onclick: () => sendFile(png) }, '📤 がぞう（PNG）で おくる'), btns.children[1] || null);
     btns.insertBefore(el('button', { class: 'btn small', onclick: () => saveFile(png) }, '⬇ がぞうを ダウンロード'), btns.lastChild);
