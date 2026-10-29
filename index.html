@@ -153,7 +153,7 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
 .modal:has(.fullbox){padding:0}
 .regtitle{font-size:22px;font-weight:700;display:flex;align-items:center;gap:12px}
 .regtitle .ch{font-family:var(--f-model);font-size:56px;color:var(--accent)}
-.imgout{max-width:90vw;max-height:70vh;border:1px solid var(--line);-webkit-user-select:auto;user-select:auto;-webkit-touch-callout:default}
+.imgout{max-width:90vw;max-height:52vh;border:1px solid var(--line);-webkit-user-select:auto;user-select:auto;-webkit-touch-callout:default}
 .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 22px;border-radius:30px;font-size:18px;z-index:60}
 .settings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
 .field{display:flex;flex-direction:column;gap:6px;font-size:16px}
@@ -292,11 +292,15 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
     <div class="sheetwrap"><canvas class="sheet" id="sheet"></canvas></div>
     <div class="row">
       <button class="btn main" id="btnSaveWork">💾 ほぞんする</button>
-      <button class="btn" id="btnImage">🖼 がぞうに する</button>
+      <button class="btn" id="btnImage">📤 パソコンへ おくる（PDF・がぞう）</button>
       <button class="btn" id="btnPrint" hidden>🖨 いんさつ</button>
     </div>
     <div class="card">
       <h2>ほぞんした ぶんしょう</h2>
+      <div class="row" style="margin-bottom:10px">
+        <button class="btn small" id="btnWorksAll">ぜんぶ えらぶ／はずす</button>
+        <button class="btn small main" id="btnWorksPDF" disabled>📤 えらんだ 0こを PDF に まとめて おくる</button>
+      </div>
       <div class="works" id="works"></div>
     </div>
   </section>
@@ -327,7 +331,10 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
         <p class="hint">もじ・ことば・ほぞんした ぶんしょうは、ひとごとに わかれて ほぞんされます。</p>
       </div>
       <div class="card">
-        <h2>ローマじ・キーボード</h2>
+        <h2>よみあげ</h2>
+        <label class="field" style="flex-direction:row;align-items:center"><input type="checkbox" id="optSpeakPick"> ことばを えらんだら こえで よむ</label>
+        <p class="hint">せっていは ひとごとに ほぞんされます。うえの「つかうひと」を かえると、その ひとの せってい・フォント・しあげかたに かわります。</p>
+        <h2 style="margin-top:14px">ローマじ・キーボード</h2>
         <div class="field">ローマじの かきかた
           <select id="optRomaji"><option value="kunrei">くんれいしき（si・ti・tu・hu）</option><option value="hepburn">ヘボンしき（shi・chi・tsu・fu）</option></select></div>
         <p class="hint">どちらで うっても ただしく はんていします。ガイドに だす かきかたを えらびます。</p>
@@ -380,6 +387,8 @@ const normText = s => kata2hira(s).replace(/!/g, '！').replace(/\?/g, '？').re
 // ===== 保存（localStorage） =====
 const STORE_KEY = 'bunshoMaker.v1';
 let DB;
+const DEF_SET = { romaji: 'kunrei', guide: 2, finger: false, sound: true, keyCase: 'lower', glyphModel: true, input: 'kana', showBig: false, chunk: 'auto', speakPick: true };
+const S = () => P().settings || (P().settings = Object.assign({}, DEF_SET));
 function newProfile(name) {
   return { id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name, glyphs: {}, words: {}, doc: [], works: [] };
 }
@@ -389,7 +398,8 @@ function loadDB() {
     const p = newProfile('ためしのひと');
     DB = { profiles: [p], current: p.id, settings: {} };
   }
-  DB.settings = Object.assign({ romaji: 'kunrei', guide: 2, finger: false, sound: true, keyCase: 'lower', glyphModel: true, input: 'kana', showBig: false, chunk: 'auto' }, DB.settings);
+  // せっていは ひと（じどうせいと）ごとに もつ。まえの ぜんたい せっていは はじめの あたいに つかう
+  DB.profiles.forEach(p => { p.settings = Object.assign({}, DEF_SET, DB.settings || {}, p.settings); });
 }
 function saveDB() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(DB)); return true; }
@@ -417,7 +427,7 @@ function renderWho() {
   DB.profiles.forEach(p => s.append(el('option', { value: p.id }, p.name)));
   s.value = DB.current;
 }
-$('#whoSel').addEventListener('change', e => { DB.current = e.target.value; saveDB(); show(currentView); });
+$('#whoSel').addEventListener('change', e => { DB.current = e.target.value; bindProfile(); saveDB(); show(currentView); toast(P().name + ' に かえました'); });
 
 // ===== よみあげ =====
 function speak(text) {
@@ -529,6 +539,7 @@ function renderChooser(key, idx) {
   ch.append(el('div', { class: 'hint' }, slot.q + ' を えらんでね'));
   const box = el('div', { class: 'chips' });
   const pick = w => {
+    if (S().speakPick) speak(w);
     mk.vals[idx] = w;
     const t = TPLS.find(t => t.id === mk.tpl);
     const next = t.parts.findIndex((p, i) => p[0] === '@' && !mk.vals[i]);
@@ -632,7 +643,7 @@ function candsOf(kana) {
     // 「き」+「ゃ」のように分けて打っても OK
     for (const a of splitC(K1[kana[0]])) for (const b of splitC(K1[kana[1]])) list.push(a + b);
   } else if (K1[kana]) list = splitC(K1[kana]);
-  const pref = DB.settings.romaji === 'hepburn' && HEP[kana];
+  const pref = S().romaji === 'hepburn' && HEP[kana];
   if (pref) list = [pref, ...list.filter(x => x !== pref)];
   return list;
 }
@@ -682,7 +693,7 @@ const splitBy = (s, re) => (s.match(re) || []).map(x => x.trim()).filter(Boolean
 function splitSentences(doc) { return doc.flatMap(line => splitBy(line, /[^。！？]+[。！？]*|[。！？]+/g)); }
 const splitTen = s => splitBy(s, /[^、。！？]+[、。！？]*|[、。！？]+/g);
 function typingChunks() {
-  const doc = P().doc, c = DB.settings.chunk;
+  const doc = P().doc, c = S().chunk;
   if (c === 'all') return [doc.join('\n')];
   const sents = splitSentences(doc);
   if (c === 'sent') return sents;
@@ -693,12 +704,12 @@ function startTyping() {
   const sents = typingChunks();
   ty = { sents, si: 0, miss: 0, start: null };
   loadSentence();
-  $('#optFinger').checked = DB.settings.finger;
-  $('#optGuide').value = String(DB.settings.guide);
-  $('#optSound').checked = DB.settings.sound;
-  $('#optInput').value = DB.settings.input;
-  $('#optBig').checked = DB.settings.showBig;
-  $('#optChunk').value = DB.settings.chunk;
+  $('#optFinger').checked = S().finger;
+  $('#optGuide').value = String(S().guide);
+  $('#optSound').checked = S().sound;
+  $('#optInput').value = S().input;
+  $('#optBig').checked = S().showBig;
+  $('#optChunk').value = S().chunk;
   $('#lblFinger').hidden = KANA_MODE();
 }
 function skipAuto() { while (ty.ui < ty.units.length && ty.units[ty.ui].skip) ty.ui++; if (ty.ui >= ty.units.length) finishTyping(); }
@@ -733,7 +744,7 @@ const allDone = () => ty.done && ty.si >= ty.sents.length - 1;
 function finishTyping() { ty.done = true; ty.ui = ty.units.length; }
 let audioCtx = null;
 function beep(ok) {
-  if (!DB.settings.sound) return;
+  if (!S().sound) return;
   try {
     audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
@@ -746,7 +757,7 @@ function beep(ok) {
 const kanaLabel = k => k === ' ' || k === '　' ? '␣' : k;
 function renderTarget() {
   const tg = $('#target'); tg.innerHTML = '';
-  const g = DB.settings.guide;
+  const g = S().guide;
   ty.units.forEach((u, i) => {
     if (u.br) { tg.append(el('div', { style: 'flex-basis:100%;height:0' })); return; }
     const cls = 'unit' + (u.skip ? ' skip' : i < ty.ui ? ' done' : i === ty.ui ? ' now' : '');
@@ -766,7 +777,7 @@ function renderTarget() {
 function renderBig() {
   const b = $('#bigNow'); b.innerHTML = '';
   // 「1もじ おおきく」は せっていで ひょうじ／ひひょうじ（できた ときは いつも だす）
-  $('#nowCard').hidden = !DB.settings.showBig && !ty.done;
+  $('#nowCard').hidden = !S().showBig && !ty.done;
   if (ty.done && !allDone()) {
     // すこし まって つぎの まとまりへ すすむ（ボタンでも すすめる）
     clearTimeout(ty.timer);
@@ -790,7 +801,7 @@ function renderBig() {
   if (KANA_MODE()) return renderBigKana(b, u);
   const c = curCands()[0] || '';
   const br = el('span', { class: 'br' });
-  if (DB.settings.guide > 0) {
+  if (S().guide > 0) {
     const nk = c.slice(ty.buf.length);
     br.append(el('span', { class: 't' }, ty.buf), el('span', { class: 'n' }, keyLabel(nk[0] || '')), nk.slice(1));
   }
@@ -804,17 +815,17 @@ const KB_ROWS = [
 ];
 const FINGER = { q:0,a:0,z:0,w:1,s:1,x:1,e:2,d:2,c:2,r:3,f:3,v:3,t:3,g:3,b:3,y:4,h:4,n:4,u:4,j:4,m:4,i:5,k:5,',':5,o:6,l:6,'.':6,p:7,'-':7,'!':0,'?':7 };
 const KEY_SHOW = { '-':'ー', ',':'、', '.':'。', '!':'！', '?':'？', ' ':'くうはく' };
-const keyLabel = k => KEY_SHOW[k] || (DB.settings.keyCase === 'upper' ? k.toUpperCase() : k);
+const keyLabel = k => KEY_SHOW[k] || (S().keyCase === 'upper' ? k.toUpperCase() : k);
 function renderKB() {
   const kb = $('#kb'); kb.innerHTML = '';
   if (KANA_MODE()) return renderKanaKB(kb);
-  const nk = DB.settings.guide === 2 && !ty.done ? nextKey() : null;
+  const nk = S().guide === 2 && !ty.done ? nextKey() : null;
   KB_ROWS.forEach((row, ri) => {
     const r = el('div', { class: 'kr' });
     if (ri === 2) r.append(el('div', { style: 'flex:.6 1 0' }));
     row.forEach(k => {
       let cls = 'key' + (k === ' ' ? ' space' : '') + (k === nk ? ' next' : '');
-      if (DB.settings.finger && FINGER[k] !== undefined) cls += ' f' + FINGER[k];
+      if (S().finger && FINGER[k] !== undefined) cls += ' f' + FINGER[k];
       const b = el('button', { class: cls, 'data-k': k, 'aria-label': KEY_SHOW[k] || k }, keyLabel(k));
       b.addEventListener('pointerdown', e => { e.preventDefault(); press(k); });
       r.append(b);
@@ -848,7 +859,7 @@ document.addEventListener('keydown', e => {
 });
 
 // ===== ② ひらがな入力（iPad「日本語かな」配列） =====
-const KANA_MODE = () => DB.settings.input !== 'roma';
+const KANA_MODE = () => S().input !== 'roma';
 // DOM は左から：左端が わ行・ー・小゛゜、右端が あ行（iPad と同じ向き）。いちばん右に くとうてん
 const KANA_COLS = [
   ['わ', 'を', 'ん', 'ー', 'MOD'], ['ら', 'り', 'る', 'れ', 'ろ'], ['や', '', 'ゆ', '', 'よ'], ['ま', 'み', 'む', 'め', 'も'],
@@ -899,7 +910,7 @@ const typeKanaDirect = c => press(c);
 function renderBigKana(b, u) {
   const shown = ty.pend || u.kana;
   b.append(el('span', { class: 'bk' }, kanaLabel(shown)));
-  if (DB.settings.guide === 0) return;
+  if (S().guide === 0) return;
   const seq = el('span', { class: 'br', style: 'font-size:34px;display:flex;gap:10px;align-items:center' });
   const nk = nextKeyKana();
   const key = (lab, on) => el('span', { class: on ? 'n' : '', style: 'border:2px solid var(--line);border-radius:10px;padding:2px 12px;background:' + (on ? 'var(--hl)' : '#fff') }, lab);
@@ -908,7 +919,7 @@ function renderBigKana(b, u) {
   b.append(seq);
 }
 function renderKanaKB(kb) {
-  const nk = DB.settings.guide === 2 ? nextKeyKana() : null;
+  const nk = S().guide === 2 ? nextKeyKana() : null;
   const grid = el('div', { class: 'kkb' });
   KANA_COLS.forEach(col => {
     const c = el('div', { class: 'kcol' });
@@ -926,14 +937,14 @@ function renderKanaKB(kb) {
   sp.addEventListener('pointerdown', e => { e.preventDefault(); press(' '); });
   kb.append(el('div', { class: 'kr' }, el('div', { style: 'flex:2 1 0' }), sp, el('div', { style: 'flex:2 1 0' })));
 }
-$('#optInput').addEventListener('change', e => { DB.settings.input = e.target.value; saveDB(); startTyping(); });
+$('#optInput').addEventListener('change', e => { S().input = e.target.value; saveDB(); startTyping(); });
 $('#btnTypeRestart').addEventListener('click', startTyping);
-$('#btnSpeakNow').addEventListener('click', () => speak(P().doc.join('')));
-$('#optFinger').addEventListener('change', e => { DB.settings.finger = e.target.checked; saveDB(); renderKB(); });
-$('#optGuide').addEventListener('change', e => { DB.settings.guide = +e.target.value; saveDB(); renderTarget(); renderBig(); renderKB(); });
-$('#optChunk').addEventListener('change', e => { DB.settings.chunk = e.target.value; saveDB(); startTyping(); });
-$('#optBig').addEventListener('change', e => { DB.settings.showBig = e.target.checked; saveDB(); renderBig(); });
-$('#optSound').addEventListener('change', e => { DB.settings.sound = e.target.checked; saveDB(); });
+$('#btnSpeakNow').addEventListener('click', () => speak((ty && ty.sents[ty.si]) || P().doc.join('')));
+$('#optFinger').addEventListener('change', e => { S().finger = e.target.checked; saveDB(); renderKB(); });
+$('#optGuide').addEventListener('change', e => { S().guide = +e.target.value; saveDB(); renderTarget(); renderBig(); renderKB(); });
+$('#optChunk').addEventListener('change', e => { S().chunk = e.target.value; saveDB(); startTyping(); });
+$('#optBig').addEventListener('change', e => { S().showBig = e.target.checked; saveDB(); renderBig(); });
+$('#optSound').addEventListener('change', e => { S().sound = e.target.checked; saveDB(); });
 
 // ===== 線をえがく共通処理 =====
 function drawStrokes(ctx, strokes, ox, oy, size, lw, color) {
@@ -993,7 +1004,10 @@ const FONTS = [
 ];
 const SMALL = 'ぁぃぅぇぉゃゅょっゎ';
 const PUNCT = '、。';
-let fin = { hi: 0, mode: 'font', dir: 'yoko', cols: 10, grid: true, name: false, font: 0, weight: 0.075, tool: 'pen', color: '#1b1b1b', size: 6, model: true, penOnly: false };
+const FIN_DEF = { hi: 0, mode: 'font', dir: 'yoko', cols: 10, grid: true, name: false, font: 0, weight: 0.075, model: true, penOnly: false };
+let fin = Object.assign({}, FIN_DEF);
+// ひとを かえたら、そのひとの しあげかた（フォント・むき など）に きりかえる
+function bindProfile() { fin = P().fin = Object.assign({}, FIN_DEF, P().fin); fin.hi = 0; }
 const CELL = 80, MARGIN = 48;
 
 function layoutLines(text, cols, name) {
@@ -1102,6 +1116,7 @@ function finText() { return P().doc.join('\n'); }
 function handChars() { if (!P().hand || Array.isArray(P().hand)) P().hand = {}; return P().hand; }
 let sheetGeomNow = null;
 async function drawFinish() {
+  saveDB();
   const cv = $('#sheet');
   if (fin.mode === 'font') await ensureFont(FONTS[fin.font][1]);
   else await ensureFont('"Klee One"');
@@ -1235,22 +1250,78 @@ function openModal(...kids) {
   const m = el('div', { class: 'modal', onclick: e => { if (e.target === m) m.remove(); } }, el('div', { class: 'box' }, ...kids));
   document.body.append(m); return m;
 }
+// ===== パソコンへ おくる（PDF・がぞう） =====
+// iPad は プリンタに つながないので、PDF や がぞうに して AirDrop・ファイル・Google ドライブ などで わたす
+function fileBase(name) {
+  const d = new Date(), z = n => String(n).padStart(2, '0');
+  return `${name || P().name}_${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}`;
+}
+function dataURLBytes(u) { const b = atob(u.split(',')[1]); const a = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+// がぞうを 1まいずつ A4 に はった PDF を つくる（よこながの ものは A4 よこ）
+function makePDF(cvs) {
+  const enc = new TextEncoder(), parts = [], offs = [];
+  let len = 0;
+  const push = d => { const b = typeof d === 'string' ? enc.encode(d) : d; parts.push(b); len += b.length; };
+  const obj = (n, body) => { offs[n] = len; push(`${n} 0 obj\n`); body(); push('\nendobj\n'); };
+  push('%PDF-1.4\n');
+  obj(1, () => push('<< /Type /Catalog /Pages 2 0 R >>'));
+  obj(2, () => push(`<< /Type /Pages /Kids [${cvs.map((_, i) => `${3 + 3 * i} 0 R`).join(' ')}] /Count ${cvs.length} >>`));
+  cvs.forEach((cv, i) => {
+    const land = cv.width > cv.height, PW = land ? 842 : 595, PH = land ? 595 : 842, M = 28;
+    const s = Math.min((PW - 2 * M) / cv.width, (PH - 2 * M) / cv.height);
+    const w = cv.width * s, h = cv.height * s, x = (PW - w) / 2, y = (PH - h) / 2;
+    const jpg = dataURLBytes(cv.toDataURL('image/jpeg', 0.92));
+    obj(3 + 3 * i, () => push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW} ${PH}] /Resources << /XObject << /Im0 ${5 + 3 * i} 0 R >> >> /Contents ${4 + 3 * i} 0 R >>`));
+    const c = `q ${w.toFixed(2)} 0 0 ${h.toFixed(2)} ${x.toFixed(2)} ${(PH - y - h).toFixed(2)} cm /Im0 Do Q`;
+    obj(4 + 3 * i, () => push(`<< /Length ${c.length} >>\nstream\n${c}\nendstream`));
+    obj(5 + 3 * i, () => { push(`<< /Type /XObject /Subtype /Image /Width ${cv.width} /Height ${cv.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpg.length} >>\nstream\n`); push(jpg); push('\nendstream'); });
+  });
+  const total = 3 + 3 * cvs.length, xref = len;
+  push(`xref\n0 ${total}\n0000000000 65535 f \n` + offs.slice(1).map(o => String(o).padStart(10, '0') + ' 00000 n \n').join(''));
+  push(`trailer\n<< /Size ${total} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+  return new Blob(parts, { type: 'application/pdf' });
+}
+function sendFile(file) {
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    navigator.share({ files: [file], title: file.name }).catch(() => {});
+  } else {
+    saveFile(file);
+  }
+}
+// ダウンロードは にほんごの なまえだと なまえが きえる ブラウザが あるので、えいすうじの なまえに する
+function saveFile(file) {
+  const ext = file.name.split('.').pop(), d = fileBase('x').slice(2);
+  const a = el('a', { href: URL.createObjectURL(file), download: `bunsho_${d}.${ext}` });
+  document.body.append(a); a.click(); a.remove();
+}
+function openSendModal(cvs, base) {
+  const pdf = new File([makePDF(cvs)], base + '.pdf', { type: 'application/pdf' });
+  const btns = el('div', { class: 'row', style: 'justify-content:center' });
+  const kids = [el('div', { class: 'regtitle' }, '📤 パソコンへ おくる')];
+  if (cvs.length === 1) kids.push(el('img', { class: 'imgout', src: cvs[0].toDataURL('image/png'), alt: 'しあがった ぶんしょう' }));
+  else kids.push(el('p', { class: 'hint' }, `${cvs.length}まいの さくひんを 1つの PDF に まとめました。`));
+  kids.push(btns);
+  kids.push(el('div', { class: 'hint', style: 'max-width:560px;line-height:1.7' },
+    '【おくりかた】「おくる」を おすと iPad の きょうゆう がめんが でます。',
+    el('br'), '・Mac へ：AirDrop', el('br'), '・Windows パソコンへ：「ファイルに保存」で Google ドライブ や OneDrive を えらぶ／Teams・メールで おくる',
+    el('br'), '・USBメモリへ：「ファイルに保存」で USB を えらぶ', el('br'), 'パソコンで PDF を ひらいて いんさつすると、A4 に おさまります。'));
+  const m = openModal(...kids);
+  if (IN_FRAME) {
+    btns.append(el('p', { class: 'hint' }, 'がぞうを ながおし →「“写真”に保存」で ほぞんできます。'), el('button', { class: 'btn', onclick: () => m.remove() }, 'とじる'));
+    return;
+  }
+  btns.append(el('button', { class: 'btn main', onclick: () => sendFile(pdf) }, '📤 PDF で おくる'));
+  if (cvs.length === 1) cvs[0].toBlob(blob => {
+    const png = new File([blob], base + '.png', { type: 'image/png' });
+    btns.insertBefore(el('button', { class: 'btn', onclick: () => sendFile(png) }, '📤 がぞう（PNG）で おくる'), btns.children[1] || null);
+    btns.insertBefore(el('button', { class: 'btn small', onclick: () => saveFile(png) }, '⬇ がぞうを ダウンロード'), btns.lastChild);
+  });
+  btns.append(el('button', { class: 'btn small', onclick: () => saveFile(pdf) }, '⬇ PDF を ダウンロード'));
+  btns.append(el('button', { class: 'btn', onclick: () => m.remove() }, 'とじる'));
+}
 $('#btnImage').addEventListener('click', async () => {
   if (!finText()) return toast('①で ぶんを つくってね');
-  const cv = await exportPNG();
-  const url = cv.toDataURL('image/png');
-  const btns = el('div', { class: 'row', style: 'justify-content:center' });
-  const m = openModal(el('div', { class: 'regtitle' }, '🖼 がぞう'), el('img', { class: 'imgout', src: url, alt: 'しあがった ぶんしょう' }),
-    el('p', { class: 'hint', style: 'text-align:center' }, 'がぞうを ながおし →「“写真”に保存」で 写真アプリに はいります。'), btns);
-  if (!IN_FRAME) {
-    cv.toBlob(blob => {
-      const file = new File([blob], 'bunsho.png', { type: 'image/png' });
-      if (navigator.canShare && navigator.canShare({ files: [file] }))
-        btns.append(el('button', { class: 'btn main', onclick: () => navigator.share({ files: [file] }).catch(() => {}) }, '📤 きょうゆう・ほぞん'));
-      btns.append(el('a', { class: 'btn', href: URL.createObjectURL(blob), download: 'bunsho.png', style: 'display:inline-flex;align-items:center;text-decoration:none' }, '⬇ ダウンロード'));
-      btns.append(el('button', { class: 'btn', onclick: () => m.remove() }, 'とじる'));
-    });
-  } else btns.append(el('button', { class: 'btn', onclick: () => m.remove() }, 'とじる'));
+  openSendModal([await exportPNG()], fileBase());
 });
 $('#btnPrint').addEventListener('click', async () => {
   if (!finText()) return toast('①で ぶんを つくってね');
@@ -1268,9 +1339,19 @@ $('#btnSaveWork').addEventListener('click', () => {
   if (saveDB()) { toast('ほぞんしました'); renderWorks(); } else P().works.shift();
 });
 const MODE_NAME = { glyph: 'じぶんのもじ', font: 'iPadのもじ', hand: 'てがき' };
+const selWorks = new Set();
+function updWorksBtn() { const n = P().works.filter(w => selWorks.has(w.id)).length; $('#btnWorksPDF').disabled = !n; $('#btnWorksPDF').textContent = `📤 えらんだ ${n}こを PDF に まとめて おくる`; }
+$('#btnWorksPDF').addEventListener('click', async () => {
+  const ws = P().works.filter(w => selWorks.has(w.id)); if (!ws.length) return;
+  const cvs = [];
+  for (const w of ws) { if (w.mode === 'font') await ensureFont(FONTS[w.font][1]); const cv = document.createElement('canvas'); renderSheet(cv, w, w.text, { hand: w.hand, exporting: true, scale: 2 }); cvs.push(cv); }
+  openSendModal(cvs, fileBase() + '_まとめ');
+});
+$('#btnWorksAll').addEventListener('click', () => { const all = P().works.every(w => selWorks.has(w.id)); P().works.forEach(w => all ? selWorks.delete(w.id) : selWorks.add(w.id)); renderWorks(); });
 function renderWorks() {
   const box = $('#works'); box.innerHTML = '';
   const ws = P().works;
+  updWorksBtn();
   if (!ws.length) { box.append(el('div', { class: 'hint' }, 'まだ ありません。')); return; }
   ws.forEach((w, i) => {
     const cv = document.createElement('canvas');
@@ -1281,7 +1362,10 @@ function renderWorks() {
       if (del.dataset.c !== '1') { del.dataset.c = '1'; del.textContent = 'ほんとう？'; setTimeout(() => { del.dataset.c = ''; del.textContent = 'けす'; }, 3000); return; }
       ws.splice(i, 1); saveDB(); renderWorks();
     });
-    box.append(el('div', { class: 'work' }, cv,
+    const pickCb = el('input', { type: 'checkbox', 'aria-label': 'えらぶ' });
+    pickCb.checked = selWorks.has(w.id);
+    pickCb.addEventListener('change', () => { pickCb.checked ? selWorks.add(w.id) : selWorks.delete(w.id); updWorksBtn(); });
+    box.append(el('div', { class: 'work' }, el('label', { class: 'hint' }, pickCb, ' えらぶ'), cv,
       el('div', { class: 'meta' }, `${d.getMonth() + 1}がつ${d.getDate()}にち ・ ${MODE_NAME[w.mode]}`),
       el('div', { class: 'row' },
         el('button', { class: 'btn small', onclick: () => openWork(w) }, 'ひらく'), del)));
@@ -1317,9 +1401,9 @@ function renderGlyphGrid() {
   });
   const n = GLYPH_ALL.filter(c => P().glyphs[c]).length;
   $('#glyphProg').textContent = `とうろく ${n} / ${GLYPH_ALL.length}`;
-  $('#optGlyphModel').checked = DB.settings.glyphModel;
+  $('#optGlyphModel').checked = S().glyphModel;
 }
-$('#optGlyphModel').addEventListener('change', e => { DB.settings.glyphModel = e.target.checked; saveDB(); });
+$('#optGlyphModel').addEventListener('change', e => { S().glyphModel = e.target.checked; saveDB(); });
 $('#btnGlyphNext').addEventListener('click', () => { const c = GLYPH_ALL.find(c => !P().glyphs[c]); if (c) openReg(c); else toast('ぜんぶ とうろくできています！'); });
 function openReg(ch) {
   let strokes = (P().glyphs[ch] || []).map(s => s.slice());
@@ -1333,7 +1417,7 @@ function openReg(ch) {
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, N, N);
     ctx.save(); ctx.setLineDash([6, 8]); ctx.strokeStyle = '#c9dcd8'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(N / 2, 0); ctx.lineTo(N / 2, N); ctx.moveTo(0, N / 2); ctx.lineTo(N, N / 2); ctx.stroke(); ctx.restore();
-    if (DB.settings.glyphModel) {
+    if (S().glyphModel) {
       ctx.fillStyle = '#e3eae9'; ctx.font = `${N * 0.8}px "Klee One",serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(ch, N / 2, N / 2 + N * 0.03);
     }
@@ -1356,8 +1440,8 @@ function openReg(ch) {
   prevBtn.disabled = idx <= 0;
   const note = SMALL.includes(ch) ? 'ちいさく かこう' : PUNCT.includes(ch) ? 'ひだりしたに ちいさく かこう' : '';
   // ③の てがきと おなじ ならび・おなじ ボタン
-  const modelCb = el('input', { type: 'checkbox' }); modelCb.checked = DB.settings.glyphModel;
-  modelCb.addEventListener('change', () => { DB.settings.glyphModel = modelCb.checked; saveDB(); paint(); });
+  const modelCb = el('input', { type: 'checkbox' }); modelCb.checked = S().glyphModel;
+  modelCb.addEventListener('change', () => { S().glyphModel = modelCb.checked; saveDB(); paint(); });
   const penCb = el('input', { type: 'checkbox' }); penCb.checked = fin.penOnly;
   penCb.addEventListener('change', () => { fin.penOnly = penCb.checked; });
   const bar = el('div', { class: 'padbar' },
@@ -1383,24 +1467,26 @@ function openReg(ch) {
 // ===== せってい =====
 function renderSetting() {
   $('#profName').value = P().name;
-  $('#optRomaji').value = DB.settings.romaji;
-  $('#optCase').value = DB.settings.keyCase;
+  $('#optRomaji').value = S().romaji;
+  $('#optCase').value = S().keyCase;
+  $('#optSpeakPick').checked = S().speakPick;
   $('#btnDownload').hidden = IN_FRAME;
 }
-$('#optRomaji').addEventListener('change', e => { DB.settings.romaji = e.target.value; saveDB(); });
-$('#optCase').addEventListener('change', e => { DB.settings.keyCase = e.target.value; saveDB(); });
+$('#optRomaji').addEventListener('change', e => { S().romaji = e.target.value; saveDB(); });
+$('#optCase').addEventListener('change', e => { S().keyCase = e.target.value; saveDB(); });
+$('#optSpeakPick').addEventListener('change', e => { S().speakPick = e.target.checked; saveDB(); });
 $('#btnProfRename').addEventListener('click', () => { const n = $('#profName').value.trim(); if (!n) return; P().name = n; saveDB(); renderWho(); toast('かえました'); });
 $('#btnProfAdd').addEventListener('click', () => {
   const n = $('#profName').value.trim();
   const p = newProfile(n && n !== P().name ? n : 'あたらしいひと' + (DB.profiles.length + 1));
-  DB.profiles.push(p); DB.current = p.id; saveDB(); renderWho(); renderSetting(); toast(p.name + ' を ついか しました');
+  DB.profiles.push(p); DB.current = p.id; bindProfile(); saveDB(); renderWho(); renderSetting(); toast(p.name + ' を ついか しました');
 });
 $('#btnProfDel').addEventListener('click', function () {
   if (DB.profiles.length <= 1) return toast('さいごの ひとりは けせません');
   if (this.dataset.c !== '1') { this.dataset.c = '1'; this.textContent = 'ほんとうに けす？（もじも きえます）'; setTimeout(() => { this.dataset.c = ''; this.textContent = 'このひとを けす'; }, 3000); return; }
   DB.profiles = DB.profiles.filter(p => p.id !== DB.current); DB.current = DB.profiles[0].id;
   this.dataset.c = ''; this.textContent = 'このひとを けす';
-  saveDB(); renderWho(); renderSetting();
+  bindProfile(); saveDB(); renderWho(); renderSetting();
 });
 const exportCode = () => JSON.stringify({ app: 'bunsho-maker', v: 1, profile: P() });
 $('#btnExport').addEventListener('click', () => { $('#exportBox').value = exportCode(); toast('コードを つくりました'); });
@@ -1419,13 +1505,15 @@ function importText(txt) {
   const p = Object.assign(newProfile(o.profile.name || 'よみこんだひと'), o.profile);
   const i = DB.profiles.findIndex(x => x.id === p.id);
   if (i >= 0) DB.profiles[i] = p; else DB.profiles.push(p);
-  DB.current = p.id; saveDB(); renderWho(); renderSetting(); toast(p.name + ' を よみこみました');
+  p.settings = Object.assign({}, DEF_SET, p.settings);
+  DB.current = p.id; bindProfile(); saveDB(); renderWho(); renderSetting(); toast(p.name + ' を よみこみました');
 }
 $('#btnImport').addEventListener('click', () => importText($('#exportBox').value.trim()));
 $('#fileImport').addEventListener('change', e => { const f = e.target.files[0]; if (!f) return; f.text().then(importText); e.target.value = ''; });
 
 // ===== はじめる =====
 loadDB();
+bindProfile();
 $('#btnPrint').hidden = IN_FRAME;
 renderWho();
 show('make');
