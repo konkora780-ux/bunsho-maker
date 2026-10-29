@@ -61,6 +61,7 @@ section.view{display:flex;flex-direction:column;gap:16px}
 .slot{font-family:var(--f-ui);font-size:24px;min-height:56px;min-width:96px;padding:4px 14px;border-radius:12px;border:3px dashed var(--accent);background:#fff;color:var(--accent);font-weight:700}
 .slot.filled{border-style:solid;background:var(--accent-soft);color:var(--ink)}
 .slot.active{box-shadow:0 0 0 4px var(--hl)}
+.vpart{color:var(--accent);border-bottom:3px dotted var(--accent)}
 .chips{display:flex;flex-wrap:wrap;gap:10px}
 .chip{min-height:60px;padding:6px 16px;border-radius:30px;border:2px solid var(--line);background:#fff;font-size:22px;font-weight:700;display:flex;align-items:center;gap:8px}
 .chip .em{font-size:26px}
@@ -403,18 +404,53 @@ function speak(text) {
 // ===== ① ぶんをつくる =====
 const SLOTS = {
   itsu: { q: 'いつ？', w: [['きょう', '📅'], ['きのう', '🌙'], ['うんどうかいで', '🏃'], ['がくしゅうはっぴょうかいで', '🎭'], ['しゅうがくりょこうで', '🚌'], ['えんそくで', '🍙'], ['さぎょうがくしゅうで', '🔨'], ['たいいくのじかんに', '🤸'], ['おんがくのじかんに', '🎵'], ['やすみじかんに', '⏰']] },
-  nani: { q: 'なにを？', w: [['かけっこ', '🏃'], ['だんす', '💃'], ['うた', '🎤'], ['がっき', '🥁'], ['そうじ', '🧹'], ['きゅうしょく', '🍛'], ['けいさん', '🔢'], ['ひらがな', '✍️'], ['え', '🎨'], ['しごと', '💼']] },
+  // 3つめ＝そのことばに あう うごき（ぶんまつが かわる）。4つめ＝「できるように」の ときの とくべつな いいかた
+  nani: { q: 'なにを？', w: [['かけっこ', '🏃', 'suru', ['で', 'はしれる']], ['だんす', '💃', 'odoru'], ['うた', '🎤', 'utau'], ['がっき', '🥁', 'ensou'], ['そうじ', '🧹', 'suru'], ['きゅうしょく', '🍛', 'taberu'], ['けいさん', '🔢', 'suru'], ['ひらがな', '✍️', 'kaku'], ['え', '🎨', 'kaku'], ['ほん', '📖', 'yomu'], ['しごと', '💼', 'suru'], ['おりがみ', '🦢', 'oru'], ['りょうり', '🍳', 'tsukuru']] },
   how: { q: 'どのように？', w: [['いっしょうけんめい', '🔥'], ['さいごまで', '🏁'], ['ともだちときょうりょくして', '🤝'], ['おおきなこえで', '📣'], ['ていねいに', '✨'], ['ひとりで', '☝️'], ['えがおで', '😄']] },
   dare: { q: 'だれと？', w: [['ともだち', '🧒'], ['せんせい', '🧑‍🏫'], ['かぞく', '👪'], ['くらすのみんな', '👫']] },
   feel: { q: 'きもちは？', w: [['とてもたのしかったです。', '😆'], ['うれしかったです。', '😊'], ['またやりたいです。', '🔁'], ['どきどきしました。', '💓'], ['がんばってよかったです。', '👍']] },
   how2: { q: 'どのくらい？', w: [['じょうずに', '👏'], ['はやく', '⚡'], ['ひとりで', '☝️'], ['ながく', '⏳'], ['たくさん', '🔢']] },
   feel2: { q: 'どうおもった？', w: [['たのしい', '😆'], ['うれしい', '😊'], ['もっとがんばりたい', '🔥'], ['すごい', '😲']] },
 };
+// うごきの かたち（した・して・できる）
+const VERBS = {
+  suru: { n: 'する', past: 'しました', te: 'して', pot: 'できる' },
+  utau: { n: 'うたう', past: 'うたいました', te: 'うたって', pot: 'うたえる' },
+  odoru: { n: 'おどる', past: 'おどりました', te: 'おどって', pot: 'おどれる' },
+  ensou: { n: 'えんそうする', past: 'えんそうしました', te: 'えんそうして', pot: 'えんそうできる' },
+  taberu: { n: 'たべる', past: 'たべました', te: 'たべて', pot: 'たべられる' },
+  kaku: { n: 'かく', past: 'かきました', te: 'かいて', pot: 'かける' },
+  yomu: { n: 'よむ', past: 'よみました', te: 'よんで', pot: 'よめる' },
+  tsukuru: { n: 'つくる', past: 'つくりました', te: 'つくって', pot: 'つくれる' },
+  oru: { n: 'おる', past: 'おりました', te: 'おって', pot: 'おれる' },
+  hashiru: { n: 'はしる', past: 'はしりました', te: 'はしって', pot: 'はしれる' },
+  asobu: { n: 'あそぶ', past: 'あそびました', te: 'あそんで', pot: 'あそべる' },
+  miru: { n: 'みる', past: 'みました', te: 'みて', pot: 'みられる' },
+  hiku: { n: 'ひく', past: 'ひきました', te: 'ひいて', pot: 'ひける' },
+  oyogu: { n: 'およぐ', past: 'およぎました', te: 'およいで', pot: 'およげる' },
+};
+function wordInfo(w) {
+  const d = SLOTS.nani.w.find(x => x[0] === w);
+  if (d) return { v: d[2], pot: d[3] };
+  return { v: (P().wordVerb || {})[w] || 'suru' };
+}
+// 「#past」などは、えらんだ「なにを」に あわせて かわる ぶぶん
+function verbPart(tok, t) {
+  const i = t.parts.indexOf('@nani'), w = mk.vals[i];
+  if (!w) return tok === '#potp' ? '' : '…';
+  const info = wordInfo(w), V = VERBS[info.v] || VERBS.suru;
+  if (tok === '#past') return 'を' + V.past;
+  if (tok === '#te') return 'を' + V.te;
+  if (tok === '#potp') return info.pot ? info.pot[0] : 'を';
+  if (tok === '#potv') return info.pot ? info.pot[1] : V.pot;
+  return '';
+}
+const partText = (p, i, t, blank) => p[0] === '@' ? (mk.vals[i] || blank) : p[0] === '#' ? verbPart(p, t) : p;
 const TPLS = [
   { id: 'gamba', em: '💪', name: 'がんばったこと', parts: ['@itsu', '、', '@nani', 'を', '@how', 'がんばりました。'] },
-  { id: 'tano', em: '😊', name: 'たのしかったこと', parts: ['@itsu', '、', '@dare', 'と', '@nani', 'をしました。', '@feel'] },
-  { id: 'deki', em: '⭐', name: 'できるようになったこと', parts: ['@nani', 'が', '@how2', 'できるようになりました。'] },
-  { id: 'omoi', em: '💭', name: 'おもったこと', parts: ['@nani', 'をして、', '@feel2', 'とおもいました。'] },
+  { id: 'tano', em: '😊', name: 'たのしかったこと', parts: ['@itsu', '、', '@dare', 'と', '@nani', '#past', '。', '@feel'] },
+  { id: 'deki', em: '⭐', name: 'できるようになったこと', parts: ['@nani', '#potp', '@how2', '#potv', 'ようになりました。'] },
+  { id: 'omoi', em: '💭', name: 'おもったこと', parts: ['@nani', '#te', '、', '@feel2', 'とおもいました。'] },
   { id: 'tsugi', em: '🚀', name: 'つぎに がんばりたいこと', parts: ['つぎは、', '@nani', 'を', '@how', 'がんばりたいです。'] },
   { id: 'jiyu', em: '✍️', name: 'じゆうに かく', parts: [] },
 ];
@@ -423,7 +459,7 @@ let mk = { tpl: 'gamba', vals: {}, active: null, free: '' };
 function sentenceText() {
   const t = TPLS.find(t => t.id === mk.tpl);
   if (t.id === 'jiyu') return normText(mk.free.trim());
-  return t.parts.map((p, i) => p[0] === '@' ? (mk.vals[i] || '') : p).join('');
+  return t.parts.map((p, i) => partText(p, i, t, '')).join('');
 }
 function sentenceComplete() {
   const t = TPLS.find(t => t.id === mk.tpl);
@@ -448,6 +484,7 @@ function renderFrame() {
   } else {
     let firstEmpty = null;
     t.parts.forEach((p, i) => {
+      if (p[0] === '#') { fr.append(el('span', { class: 'vpart' }, verbPart(p, t))); return; }
       if (p[0] !== '@') { fr.append(el('span', {}, p)); return; }
       const key = p.slice(1), v = mk.vals[i];
       if (!v && firstEmpty === null) firstEmpty = i;
@@ -478,15 +515,20 @@ function renderChooser(key, idx) {
   });
   ch.append(box);
   const inp = el('input', { type: 'text', placeholder: 'あたらしい ことば', 'aria-label': 'あたらしい ことば', style: 'padding:10px;border-radius:10px;border:2px solid var(--line);flex:1;min-width:0' });
-  ch.append(el('div', { class: 'row', style: 'margin-top:10px' }, inp,
+  // 「なにを」には、そのことばに あう うごきも えらぶ
+  const vsel = el('select', { 'aria-label': 'どうする', style: 'padding:10px;border-radius:10px;border:2px solid var(--line);background:#fff' });
+  Object.entries(VERBS).forEach(([k, v]) => vsel.append(el('option', { value: k }, '〜を ' + v.n)));
+  ch.append(el('div', { class: 'row', style: 'margin-top:10px' }, inp, key === 'nani' ? vsel : '',
     el('button', { class: 'btn small', onclick: () => {
       const w = normText(inp.value.trim()); if (!w) return;
-      (P().words[key] = P().words[key] || []).push(w); saveDB(); pick(w);
+      (P().words[key] = P().words[key] || []).push(w);
+      if (key === 'nani') (P().wordVerb = P().wordVerb || {})[w] = vsel.value;
+      saveDB(); pick(w);
     } }, '＋ ことばを ふやす')));
 }
 function renderPreview() {
   const t = TPLS.find(t => t.id === mk.tpl);
-  const s = t.id === 'jiyu' ? sentenceText() : t.parts.map((p, i) => p[0] === '@' ? (mk.vals[i] || '〇〇') : p).join('');
+  const s = t.id === 'jiyu' ? sentenceText() : t.parts.map((p, i) => partText(p, i, t, '〇〇')).join('');
   $('#sentPreview').textContent = s || '（ことばを えらぶと ここに でます）';
   $('#btnAddSent').disabled = !sentenceComplete();
 }
