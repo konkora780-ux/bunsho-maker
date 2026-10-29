@@ -139,6 +139,18 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
 .modal{position:fixed;inset:0;background:rgba(20,35,38,.55);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
 .modal .box{background:#fff;border-radius:18px;padding:16px;max-width:96vw;max-height:94vh;overflow:auto;display:flex;flex-direction:column;gap:12px;align-items:center}
 .regcv{width:min(420px,80vw,60vh);height:min(420px,80vw,60vh);border:3px solid var(--accent);border-radius:12px;touch-action:none;background:#fff}
+/* かき支援と おなじく、がめん いっぱいの おおきな わくで かく */
+.fullpad{position:fixed;inset:0;z-index:45;background:var(--bg);display:flex;flex-direction:column;align-items:center;gap:10px;
+  padding:calc(10px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.padbar{width:100%;display:flex;flex-direction:column;gap:8px;background:var(--card);border-radius:14px;padding:8px 12px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.padbar .regtitle .ch{font-size:44px}
+.bigcv{border:3px solid var(--accent);border-radius:14px;touch-action:none;background:#fff;flex:none}
+.hctx{font-family:var(--f-model);font-size:24px;letter-spacing:.08em;word-break:break-all}
+.hctx .cur{background:var(--hl);border-radius:6px;padding:0 2px}
+.hctx .dn{color:var(--ok)}
+.modal .box.fullbox{width:100vw;height:100%;max-width:none;max-height:none;border-radius:0;justify-content:flex-start;
+  padding:calc(10px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.modal:has(.fullbox){padding:0}
 .regtitle{font-size:22px;font-weight:700;display:flex;align-items:center;gap:12px}
 .regtitle .ch{font-family:var(--f-model);font-size:56px;color:var(--accent)}
 .imgout{max-width:90vw;max-height:70vh;border:1px solid var(--line);-webkit-user-select:auto;user-select:auto;-webkit-touch-callout:default}
@@ -253,25 +265,26 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
         <label id="lblFont">フォント <select id="optFont"></select></label>
         <label id="lblWeight">せんの ふとさ <select id="optWeight"><option value="0.05">ほそい</option><option value="0.075" selected>ふつう</option><option value="0.1">ふとい</option></select></label>
       </div>
-      <div class="handpad" id="handTools">
-        <canvas id="handPad" class="regcv" aria-label="もじを かく わく"></canvas>
-        <div class="padside">
-          <div class="regtitle"><span class="ch" id="handCh"></span>を かこう</div>
-          <div class="hint" id="handPos"></div>
-          <div class="row">
-            <button class="btn" id="btnHandPrev">◀ まえ</button>
-            <button class="btn main" id="btnHandNext">かけた！ つぎへ ▶</button>
+      <div id="handTools" style="margin-top:12px">
+        <div class="row"><button class="btn main" id="btnHandOpen">✏️ おおきな わくで かく</button><span class="hint" id="handPos2"></span></div>
+        <p class="hint">したの シートの ますを タップすると、その もじから かけます。</p>
+        <div class="fullpad" id="handFull" hidden>
+          <div class="padbar">
+            <div class="regtitle"><span class="ch" id="handCh"></span><span class="hint" id="handPos"></span></div>
+            <div class="row">
+              <button class="btn" id="btnHandPrev">◀ まえ</button>
+              <button class="btn main" id="btnHandNext">かけた！ つぎへ ▶</button>
+              <button class="btn" id="btnHandUndo">↶ もどす</button>
+              <button class="btn" id="btnHandErase">この もじを けす</button>
+              <button class="btn" id="btnHandSpeak">🔊</button>
+              <label class="hint"><input type="checkbox" id="optModel" checked> おてほん</label>
+              <label class="hint"><input type="checkbox" id="optPenOnly"> ペンだけ</label>
+              <button class="btn" id="btnHandClose">✓ おわる</button>
+              <button class="btn small warn" id="btnHandClear">ぜんぶ けす</button>
+            </div>
+            <div class="hctx" id="handCtx"></div>
           </div>
-          <div class="row">
-            <button class="btn small" id="btnHandUndo">↶ もどす</button>
-            <button class="btn small" id="btnHandErase">この もじを けす</button>
-            <button class="btn small warn" id="btnHandClear">ぜんぶ けす</button>
-          </div>
-          <div class="opts">
-            <label><input type="checkbox" id="optModel" checked> おてほん（うすい もじ）</label>
-            <label><input type="checkbox" id="optPenOnly"> ペンだけで かく</label>
-          </div>
-          <p class="hint">したの シートの ますを タップすると、その もじを かきなおせます。</p>
+          <canvas id="handPad" class="bigcv" aria-label="もじを かく わく"></canvas>
         </div>
       </div>
       <div class="missing" id="missingInfo"></div>
@@ -1126,21 +1139,38 @@ $$('.mode').forEach(b => b.addEventListener('click', () => { fin.mode = b.datase
 const PADN = 300;
 let padStrokes = [];
 const handCells = () => sheetGeom(fin, finText()).cells;
+// わくを がめんに あわせて できるだけ おおきく する（ねばりを なくすため こまかい がそで）
+function fitBigCanvas(cv, reserve) {
+  const size = Math.max(200, Math.floor(Math.min(window.innerWidth - 36, window.innerHeight - reserve - 30)));
+  const dpr = window.devicePixelRatio || 1;
+  cv.style.width = cv.style.height = size + 'px';
+  cv.width = cv.height = Math.round(size * dpr);
+}
+function openHandFull(open) {
+  $('#handFull').hidden = !open;
+  document.body.style.overflow = open ? 'hidden' : '';
+  if (open) { renderHandPad(); fitBigCanvas($('#handPad'), $('#handFull .padbar').offsetHeight); paintPad(); }
+  else drawFinish();
+}
 function renderHandPad() {
   const cells = handCells();
-  if (!cells.length) { $('#handCh').textContent = ''; $('#handPos').textContent = '①で ぶんを つくってね'; return; }
+  if (!cells.length) { $('#handCh').textContent = ''; $('#handPos').textContent = $('#handPos2').textContent = '①で ぶんを つくってね'; return; }
   fin.hi = Math.min(Math.max(fin.hi || 0, 0), cells.length - 1);
   const cell = cells[fin.hi], h = handChars()[fin.hi];
   padStrokes = h && h.ch === cell.ch ? h.s.map(s => s.slice()) : [];
   $('#handCh').textContent = cell.ch;
   const done = cells.filter(c => { const x = handChars()[c.n]; return x && x.ch === c.ch && x.s.length; }).length;
-  $('#handPos').textContent = `${fin.hi + 1}もじめ ／ ぜんぶで ${cells.length}もじ（かいた もじ ${done}）`;
+  $('#handPos').textContent = $('#handPos2').textContent = `${fin.hi + 1}もじめ ／ ${cells.length}もじ（かいた もじ ${done}）`;
+  // いま かいている ぎょうを みせる
+  const ctx = $('#handCtx'); ctx.innerHTML = '';
+  cells.filter(c => c.r === cell.r).forEach(c => ctx.append(el('span', { class: c.n === fin.hi ? 'cur' : c.n < fin.hi ? 'dn' : '' }, c.ch)));
   $('#btnHandPrev').disabled = fin.hi <= 0;
   paintPad();
 }
 function paintPad(live) {
   const cv = $('#handPad'), ctx = cv.getContext('2d');
-  ctx.setTransform(2, 0, 0, 2, 0, 0);
+  const sc = cv.width / PADN;
+  ctx.setTransform(sc, 0, 0, sc, 0, 0);
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PADN, PADN);
   ctx.save(); ctx.setLineDash([6, 8]); ctx.strokeStyle = '#c9dcd8'; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.moveTo(PADN / 2, 0); ctx.lineTo(PADN / 2, PADN); ctx.moveTo(0, PADN / 2); ctx.lineTo(PADN, PADN / 2); ctx.stroke(); ctx.restore();
@@ -1169,9 +1199,13 @@ attachDraw($('#handPad'), {
 function goHand(d) {
   savePad();
   const n = handCells().length;
-  if (d > 0 && fin.hi >= n - 1) { toast('ぜんぶ かけたね！'); renderHandPad(); return; }
+  if (d > 0 && fin.hi >= n - 1) { toast('ぜんぶ かけたね！'); openHandFull(false); renderHandPad(); return; }
   fin.hi += d; renderHandPad(); drawFinish();
 }
+$('#btnHandOpen').addEventListener('click', () => openHandFull(true));
+$('#btnHandSpeak').addEventListener('click', () => speak($('#handCh').textContent));
+$('#btnHandClose').addEventListener('click', () => { savePad(); openHandFull(false); });
+window.addEventListener('resize', () => { if (!$('#handFull').hidden) { fitBigCanvas($('#handPad'), $('#handFull .padbar').offsetHeight); paintPad(); } });
 $('#btnHandNext').addEventListener('click', () => goHand(1));
 $('#btnHandPrev').addEventListener('click', () => goHand(-1));
 $('#btnHandUndo').addEventListener('click', () => { padStrokes.pop(); paintPad(); savePad(); });
@@ -1186,7 +1220,7 @@ $('#sheet').addEventListener('click', e => {
   const r = e.currentTarget.getBoundingClientRect();
   const x = (e.clientX - r.left) / r.width * sheetGeomNow.W, y = (e.clientY - r.top) / r.height * sheetGeomNow.H;
   const hit = sheetGeomNow.cells.find(c => { const [cx, cy] = sheetGeomNow.cellXY(c.r, c.c); return x >= cx && x < cx + CELL && y >= cy && y < cy + CELL; });
-  if (hit) { savePad(); fin.hi = hit.n; renderHandPad(); drawFinish(); }
+  if (hit) { savePad(); fin.hi = hit.n; openHandFull(true); }
 });
 window.addEventListener('resize', () => { if (currentView === 'finish') drawFinish(); });
 
@@ -1291,10 +1325,11 @@ function openReg(ch) {
   let strokes = (P().glyphs[ch] || []).map(s => s.slice());
   const N = 300;
   const cv = el('canvas', { class: 'regcv' });
-  cv.width = N * 2; cv.height = N * 2;
+  cv.className = 'bigcv';
   const ctx = cv.getContext('2d');
   const paint = (live) => {
-    ctx.setTransform(2, 0, 0, 2, 0, 0);
+    const sc = cv.width / N;
+    ctx.setTransform(sc, 0, 0, sc, 0, 0);
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, N, N);
     ctx.save(); ctx.setLineDash([6, 8]); ctx.strokeStyle = '#c9dcd8'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(N / 2, 0); ctx.lineTo(N / 2, N); ctx.moveTo(0, N / 2); ctx.lineTo(N, N / 2); ctx.stroke(); ctx.restore();
@@ -1307,6 +1342,7 @@ function openReg(ch) {
   };
   attachDraw(cv, {
     toLogical: (fx, fy) => [fx, fy],
+    penOnly: () => fin.penOnly,
     onDraw: pts => paint(pts),
     onEnd: pts => { strokes.push(simplify(pts, 0.006)); paint(); },
   });
@@ -1319,19 +1355,29 @@ function openReg(ch) {
   const prevBtn = el('button', { class: 'btn', onclick: () => go(-1) }, '◀ まえ');
   prevBtn.disabled = idx <= 0;
   const note = SMALL.includes(ch) ? 'ちいさく かこう' : PUNCT.includes(ch) ? 'ひだりしたに ちいさく かこう' : '';
-  const m = openModal(
-    el('div', { class: 'regtitle' }, el('span', { class: 'ch' }, ch), 'を かこう', note ? el('span', { class: 'hint' }, note) : ''),
-    cv,
-    el('div', { class: 'row', style: 'justify-content:center' },
-      el('button', { class: 'btn', onclick: () => { strokes.pop(); paint(); } }, '↶ もどす'),
-      el('button', { class: 'btn warn', onclick: () => { strokes = []; paint(); } }, 'けす'),
-      el('button', { class: 'btn', onclick: () => speak(ch) }, '🔊')),
-    el('div', { class: 'row', style: 'justify-content:center' },
+  // ③の てがきと おなじ ならび・おなじ ボタン
+  const modelCb = el('input', { type: 'checkbox' }); modelCb.checked = DB.settings.glyphModel;
+  modelCb.addEventListener('change', () => { DB.settings.glyphModel = modelCb.checked; saveDB(); paint(); });
+  const penCb = el('input', { type: 'checkbox' }); penCb.checked = fin.penOnly;
+  penCb.addEventListener('change', () => { fin.penOnly = penCb.checked; });
+  const bar = el('div', { class: 'padbar' },
+    el('div', { class: 'regtitle' }, el('span', { class: 'ch' }, ch), el('span', { class: 'hint' }, `${idx + 1}もじめ ／ ${GLYPH_ALL.length}もじ${note ? '　' + note : ''}`)),
+    el('div', { class: 'row' },
       prevBtn,
-      el('button', { class: 'btn main', onclick: () => go(1) }, 'とうろくして つぎへ ▶'),
-      el('button', { class: 'btn', onclick: () => { save(); m.remove(); renderGlyphGrid(); } }, 'とじる')));
+      el('button', { class: 'btn main', onclick: () => go(1) }, 'かけた！ つぎへ ▶'),
+      el('button', { class: 'btn', onclick: () => { strokes.pop(); paint(); } }, '↶ もどす'),
+      el('button', { class: 'btn', onclick: () => { strokes = []; paint(); } }, 'この もじを けす'),
+      el('button', { class: 'btn', onclick: () => speak(ch) }, '🔊'),
+      el('label', { class: 'hint' }, modelCb, ' おてほん'),
+      el('label', { class: 'hint' }, penCb, ' ペンだけ'),
+      el('button', { class: 'btn', onclick: () => { save(); m.remove(); renderGlyphGrid(); } }, '✓ おわる')));
+  const m = openModal(bar, cv);
+  m.onclick = null;
+  m.querySelector('.box').classList.add('fullbox');
+  const fit = () => { if (!m.isConnected) return window.removeEventListener('resize', fit); fitBigCanvas(cv, bar.offsetHeight); paint(); };
+  window.addEventListener('resize', fit);
+  fit();
   ensureFont('"Klee One"').then(() => paint());
-  paint();
 }
 
 // ===== せってい =====
