@@ -226,6 +226,7 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
       <label class="hint" id="lblFinger"><input type="checkbox" id="optFinger"> ゆびの いろ</label>
       <label class="hint">ガイド
         <select id="optGuide"><option value="2">ヒント＋キーを ひからせる</option><option value="1">ヒントだけ</option><option value="0">なし</option></select></label>
+      <label class="hint"><input type="checkbox" id="optBig"> 1もじを おおきく だす</label>
       <label class="hint"><input type="checkbox" id="optSound"> おと</label>
     </div>
   </section>
@@ -361,7 +362,7 @@ function loadDB() {
     const p = newProfile('ためしのひと');
     DB = { profiles: [p], current: p.id, settings: {} };
   }
-  DB.settings = Object.assign({ romaji: 'kunrei', guide: 2, finger: false, sound: true, keyCase: 'lower', glyphModel: true, input: 'kana' }, DB.settings);
+  DB.settings = Object.assign({ romaji: 'kunrei', guide: 2, finger: false, sound: true, keyCase: 'lower', glyphModel: true, input: 'kana', showBig: false }, DB.settings);
 }
 function saveDB() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(DB)); return true; }
@@ -657,6 +658,7 @@ function startTyping() {
   $('#optGuide').value = String(DB.settings.guide);
   $('#optSound').checked = DB.settings.sound;
   $('#optInput').value = DB.settings.input;
+  $('#optBig').checked = DB.settings.showBig;
   $('#lblFinger').hidden = KANA_MODE();
 }
 function skipAuto() { while (ty.ui < ty.units.length && ty.units[ty.ui].skip) ty.ui++; if (ty.ui >= ty.units.length) finishTyping(); }
@@ -715,6 +717,8 @@ function renderTarget() {
 }
 function renderBig() {
   const b = $('#bigNow'); b.innerHTML = '';
+  // 「1もじ おおきく」は せっていで ひょうじ／ひひょうじ（できた ときは いつも だす）
+  $('#nowCard').hidden = !DB.settings.showBig && !ty.done;
   if (ty.done) {
     const sec = ty.start ? Math.round((Date.now() - ty.start) / 1000) : 0;
     b.append(el('div', { class: 'done-box' }, '🎉 できたね！',
@@ -869,6 +873,7 @@ $('#btnTypeRestart').addEventListener('click', startTyping);
 $('#btnSpeakNow').addEventListener('click', () => speak(P().doc.join('')));
 $('#optFinger').addEventListener('change', e => { DB.settings.finger = e.target.checked; saveDB(); renderKB(); });
 $('#optGuide').addEventListener('change', e => { DB.settings.guide = +e.target.value; saveDB(); renderTarget(); renderBig(); renderKB(); });
+$('#optBig').addEventListener('change', e => { DB.settings.showBig = e.target.checked; saveDB(); renderBig(); });
 $('#optSound').addEventListener('change', e => { DB.settings.sound = e.target.checked; saveDB(); });
 
 // ===== 線をえがく共通処理 =====
