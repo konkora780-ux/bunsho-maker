@@ -228,6 +228,7 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
       <label class="hint" id="lblFinger"><input type="checkbox" id="optFinger"> ゆびの いろ</label>
       <label class="hint">ガイド
         <select id="optGuide"><option value="2">ヒント＋キーを ひからせる</option><option value="1">ヒントだけ</option><option value="0">なし</option></select></label>
+      <label class="hint">くぎり <select id="optChunk"><option value="auto">1ぶん（ながい ときは「、」まで）</option><option value="ten">いつも「、」「。」まで</option><option value="sent">1ぶんずつ</option><option value="all">ぜんぶ いっきに</option></select></label>
       <label class="hint"><input type="checkbox" id="optBig"> 1もじを おおきく だす</label>
       <label class="hint"><input type="checkbox" id="optSound"> おと</label>
     </div>
@@ -375,7 +376,7 @@ function loadDB() {
     const p = newProfile('ためしのひと');
     DB = { profiles: [p], current: p.id, settings: {} };
   }
-  DB.settings = Object.assign({ romaji: 'kunrei', guide: 2, finger: false, sound: true, keyCase: 'lower', glyphModel: true, input: 'kana', showBig: false }, DB.settings);
+  DB.settings = Object.assign({ romaji: 'kunrei', guide: 2, finger: false, sound: true, keyCase: 'lower', glyphModel: true, input: 'kana', showBig: false, chunk: 'auto' }, DB.settings);
 }
 function saveDB() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(DB)); return true; }
@@ -662,16 +663,29 @@ function buildUnits(text) {
   return units;
 }
 let ty = null;
+// うつ まとまり：1ぶん（「。！？」まで）。ながい ぶんは「、」で さらに くぎる
+const LONG_SENT = 12;
+const splitBy = (s, re) => (s.match(re) || []).map(x => x.trim()).filter(Boolean);
+function splitSentences(doc) { return doc.flatMap(line => splitBy(line, /[^。！？]+[。！？]*|[。！？]+/g)); }
+const splitTen = s => splitBy(s, /[^、。！？]+[、。！？]*|[、。！？]+/g);
+function typingChunks() {
+  const doc = P().doc, c = DB.settings.chunk;
+  if (c === 'all') return [doc.join('\n')];
+  const sents = splitSentences(doc);
+  if (c === 'sent') return sents;
+  if (c === 'ten') return sents.flatMap(splitTen);
+  return sents.flatMap(s => s.length > LONG_SENT ? splitTen(s) : [s]);
+}
 function startTyping() {
-  const text = P().doc.join('\n');
-  ty = { units: KANA_MODE() ? buildKanaUnits(text) : buildUnits(text), ui: 0, buf: '', pend: null, miss: 0, start: null, done: false, typed: [] };
-  skipAuto();
-  renderTarget(); renderBig(); renderKB();
+  const sents = typingChunks();
+  ty = { sents, si: 0, miss: 0, start: null };
+  loadSentence();
   $('#optFinger').checked = DB.settings.finger;
   $('#optGuide').value = String(DB.settings.guide);
   $('#optSound').checked = DB.settings.sound;
   $('#optInput').value = DB.settings.input;
   $('#optBig').checked = DB.settings.showBig;
+  $('#optChunk').value = DB.settings.chunk;
   $('#lblFinger').hidden = KANA_MODE();
 }
 function skipAuto() { while (ty.ui < ty.units.length && ty.units[ty.ui].skip) ty.ui++; if (ty.ui >= ty.units.length) finishTyping(); }
@@ -695,6 +709,14 @@ function completeUnit() {
   ty.units[ty.ui].typed = ty.buf; ty.buf = ''; ty.ui++;
   skipAuto();
 }
+function loadSentence() {
+  const text = ty.sents[ty.si] || '';
+  Object.assign(ty, { units: KANA_MODE() ? buildKanaUnits(text) : buildUnits(text), ui: 0, buf: '', pend: null, done: false, typed: [] });
+  skipAuto();
+  renderTarget(); renderBig(); renderKB();
+}
+function nextSentence() { clearTimeout(ty.timer); if (ty.done && ty.si < ty.sents.length - 1) { ty.si++; loadSentence(); } }
+const allDone = () => ty.done && ty.si >= ty.sents.length - 1;
 function finishTyping() { ty.done = true; ty.ui = ty.units.length; }
 let audioCtx = null;
 function beep(ok) {
@@ -726,12 +748,22 @@ function renderTarget() {
     tg.append(el('span', { class: cls }, el('span', { class: 'k' }, kanaLabel(u.kana)), rEl));
   });
   const n = ty.units.filter(u => !u.skip).length, d = ty.units.slice(0, ty.ui).filter(u => !u.skip).length;
-  $('#typeStat').textContent = `${d} / ${n} もじ　ミス ${ty.miss}`;
+  $('#typeStat').textContent = (ty.sents.length > 1 ? `${ty.si + 1}ばんめ／${ty.sents.length}　` : '') + `${d} / ${n} もじ　ミス ${ty.miss}`;
 }
 function renderBig() {
   const b = $('#bigNow'); b.innerHTML = '';
   // 「1もじ おおきく」は せっていで ひょうじ／ひひょうじ（できた ときは いつも だす）
   $('#nowCard').hidden = !DB.settings.showBig && !ty.done;
+  if (ty.done && !allDone()) {
+    // すこし まって つぎの まとまりへ すすむ（ボタンでも すすめる）
+    clearTimeout(ty.timer);
+    const si = ty.si;
+    ty.timer = setTimeout(() => { if (ty.si === si) nextSentence(); }, 900);
+    b.append(el('div', { class: 'done-box' }, '⭐ できた！',
+      el('div', { class: 'row', style: 'justify-content:center;margin-top:10px' },
+        el('button', { class: 'btn main', onclick: nextSentence }, 'つぎへ ▶'))));
+    return;
+  }
   if (ty.done) {
     const sec = ty.start ? Math.round((Date.now() - ty.start) / 1000) : 0;
     b.append(el('div', { class: 'done-box' }, '🎉 できたね！',
@@ -886,6 +918,7 @@ $('#btnTypeRestart').addEventListener('click', startTyping);
 $('#btnSpeakNow').addEventListener('click', () => speak(P().doc.join('')));
 $('#optFinger').addEventListener('change', e => { DB.settings.finger = e.target.checked; saveDB(); renderKB(); });
 $('#optGuide').addEventListener('change', e => { DB.settings.guide = +e.target.value; saveDB(); renderTarget(); renderBig(); renderKB(); });
+$('#optChunk').addEventListener('change', e => { DB.settings.chunk = e.target.value; saveDB(); startTyping(); });
 $('#optBig').addEventListener('change', e => { DB.settings.showBig = e.target.checked; saveDB(); renderBig(); });
 $('#optSound').addEventListener('change', e => { DB.settings.sound = e.target.checked; saveDB(); });
 
