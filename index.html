@@ -174,6 +174,10 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
   #printArea img{width:100%;height:auto}
 }
 #printArea{display:none}
+.saveerr{position:fixed;left:0;right:0;top:0;z-index:70;background:var(--ng);color:#fff;font-weight:700;font-size:16px;padding:calc(10px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px))}
+.cutbox{display:flex;flex-wrap:wrap;gap:4px;max-width:720px}
+.cutch{min-width:44px;min-height:52px;font-size:26px;font-family:var(--f-model);border:2px solid var(--line);border-radius:8px;background:#fff}
+.cutch.cut{border-right:6px solid var(--ng)}
 .app-version{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(8px + env(safe-area-inset-bottom,0px));font-size:.7rem;color:var(--ink);opacity:.35;pointer-events:none;z-index:5}
 @media (max-width:860px){nav.steps button{font-size:16px;gap:4px;padding:0 6px}nav.steps button .no{width:24px;height:24px}nav.steps button.tool{padding:0 10px}}
 @media (max-width:600px){.key{height:48px;font-size:20px}.bignow .bk{font-size:64px}.bignow .br{font-size:36px}.target .unit .k{font-size:26px}}
@@ -255,6 +259,8 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
       <label class="hint">ガイド
         <select id="optGuide"><option value="2">ヒント＋キーを ひからせる</option><option value="1">ヒントだけ</option><option value="0">なし</option></select></label>
       <label class="hint">くぎり <select id="optChunk"><option value="auto">1ぶん（ながい ときは「、」まで）</option><option value="ten">いつも「、」「。」まで</option><option value="sent">1ぶんずつ</option><option value="all">ぜんぶ いっきに</option></select></label>
+      <button class="btn small" id="btnCuts">✂ くぎりを なおす</button>
+      <label class="hint">つぎへの すすみかた <select id="optAdvance"><option value="auto09">すぐ じどうで（0.9びょう）</option><option value="auto2">ゆっくり じどうで（2びょう）</option><option value="manual">じぶんで「つぎへ」を おす</option></select></label>
       <label class="hint"><input type="checkbox" id="optBig"> 1もじを おおきく だす</label>
       <label class="hint"><input type="checkbox" id="optSound"> おと</label>
       </div>
@@ -382,6 +388,7 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
         <textarea class="edit" id="exportBox" style="font-size:16px;font-family:monospace;min-height:80px" aria-label="バックアップコード"></textarea>
         <div class="row">
           <button class="btn small" id="btnImport">はりつけた コードを よみこむ</button>
+          <button class="btn small warn" id="btnUndoReplace" hidden>おきかえる まえに もどす</button>
           <label class="btn small" style="display:inline-flex;align-items:center">ファイルから<input type="file" id="fileImport" accept=".json,application/json,text/plain" hidden></label>
         </div>
       </div>
@@ -419,7 +426,7 @@ const normText = s => kata2hira(s).replace(/!/g, '！').replace(/\?/g, '？').re
 // ===== 保存（localStorage） =====
 const STORE_KEY = 'bunshoMaker.v1';
 let DB;
-const DEF_SET = { romaji: 'kunrei', guide: 2, finger: false, sound: true, keyCase: 'lower', glyphModel: true, input: 'kana', showBig: false, chunk: 'auto', speakPick: true };
+const DEF_SET = { romaji: 'kunrei', guide: 2, finger: false, sound: true, keyCase: 'lower', glyphModel: true, input: 'kana', showBig: false, chunk: 'auto', speakPick: true, advance: 'auto09' };
 const S = () => P().settings || (P().settings = Object.assign({}, DEF_SET));
 function newProfile(name) {
   return { id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name, glyphs: {}, words: {}, doc: [], works: [] };
@@ -433,9 +440,17 @@ function loadDB() {
   // せっていは ひと（じどうせいと）ごとに もつ。まえの ぜんたい せっていは はじめの あたいに つかう
   DB.profiles.forEach(p => { p.settings = Object.assign({}, DEF_SET, DB.settings || {}, p.settings); });
 }
+// ほぞんに しっぱい したら、きえない おしらせを だす（つぎに せいこう するまで）
+function saveBanner(on) {
+  let b = document.getElementById('saveErr');
+  if (!on) { if (b) b.remove(); return; }
+  if (b) return;
+  b = el('div', { id: 'saveErr', class: 'saveerr', role: 'alert' }, '⚠ ほぞんできませんでした。iPad の ようりょうが いっぱいかも しれません。ほぞんした さくひんを PDF に して おくり、いらない さくひんを けしてから、もういちど ためしてください。');
+  document.body.append(b);
+}
 function saveDB() {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(DB)); return true; }
-  catch (e) { toast('ほぞんできませんでした（ようりょうが いっぱいかも）'); return false; }
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(DB)); saveBanner(false); return true; }
+  catch (e) { saveBanner(true); return false; }
 }
 const P = () => DB.profiles.find(p => p.id === DB.current) || DB.profiles[0];
 
@@ -465,11 +480,21 @@ function applyRole() {
 (() => {
   const b = $('#roleBtn'); let t = null;
   const cancel = () => { clearTimeout(t); t = null; b.classList.remove('press'); };
+  let pd = 0;
+  const flip = () => { DB.role = DB.role === 'student' ? 'teacher' : 'student'; saveDB(); applyRole();
+    toast(DB.role === 'student' ? 'じどうせいと モードに しました' : 'せんせい モードに しました'); };
+  // ながおし できない とき（キーボード・VoiceOver・スイッチコントロール）は、かくにん がめんで きりかえる
+  b.addEventListener('click', () => {
+    if (pd && Date.now() - pd < 3000) return;
+    const to = DB.role === 'student' ? 'せんせい' : 'じどうせいと';
+    const m = openModal(el('div', { class: 'regtitle' }, to + ' モードに しますか？'),
+      el('div', { class: 'row' }, el('button', { class: 'btn main', onclick: () => { m.remove(); flip(); } }, 'はい、' + to + ' モードに する'), el('button', { class: 'btn', onclick: () => m.remove() }, 'やめる')));
+  });
   b.addEventListener('pointerdown', e => {
+    pd = Date.now();
     e.preventDefault(); b.classList.add('press');
     t = setTimeout(() => {
-      cancel(); DB.role = DB.role === 'student' ? 'teacher' : 'student'; saveDB(); applyRole();
-      toast(DB.role === 'student' ? 'じどうせいと モードに しました' : 'せんせい モードに しました');
+      cancel(); flip();
     }, 1200);
   });
   ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => { if (t) { cancel(); toast('ながおし すると きりかわります'); } }));
@@ -502,24 +527,27 @@ const SLOTS = {
   dare: { q: 'だれと？', w: [['ともだち', '🧒'], ['せんせい', '🧑‍🏫'], ['かぞく', '👪'], ['くらすのみんな', '👫']] },
   feel: { q: 'きもちは？', w: [['とてもたのしかったです。', '😆'], ['うれしかったです。', '😊'], ['またやりたいです。', '🔁'], ['どきどきしました。', '💓'], ['がんばってよかったです。', '👍']] },
   how2: { q: 'どのくらい？', w: [['じょうずに', '👏'], ['はやく', '⚡'], ['ひとりで', '☝️'], ['ながく', '⏳'], ['たくさん', '🔢']] },
+  // 「がんばったこと」「つぎに」の ぶんまつ：えらんだ「なにを」に あわせて かわる（renderChooser で つくる）
+  gend: { q: 'どうした？', w: [] },
+  tend: { q: 'どうしたい？', w: [] },
   feel2: { q: 'どうおもった？', w: [['たのしい', '😆'], ['うれしい', '😊'], ['もっとがんばりたい', '🔥'], ['すごい', '😲']] },
 };
 // うごきの かたち（した・して・できる）
 const VERBS = {
-  suru: { n: 'する', past: 'しました', te: 'して', pot: 'できる' },
-  utau: { n: 'うたう', past: 'うたいました', te: 'うたって', pot: 'うたえる' },
-  odoru: { n: 'おどる', past: 'おどりました', te: 'おどって', pot: 'おどれる' },
-  ensou: { n: 'えんそうする', past: 'えんそうしました', te: 'えんそうして', pot: 'えんそうできる' },
-  taberu: { n: 'たべる', past: 'たべました', te: 'たべて', pot: 'たべられる' },
-  kaku: { n: 'かく', past: 'かきました', te: 'かいて', pot: 'かける' },
-  yomu: { n: 'よむ', past: 'よみました', te: 'よんで', pot: 'よめる' },
-  tsukuru: { n: 'つくる', past: 'つくりました', te: 'つくって', pot: 'つくれる' },
-  oru: { n: 'おる', past: 'おりました', te: 'おって', pot: 'おれる' },
-  hashiru: { n: 'はしる', past: 'はしりました', te: 'はしって', pot: 'はしれる' },
-  asobu: { n: 'あそぶ', past: 'あそびました', te: 'あそんで', pot: 'あそべる' },
-  miru: { n: 'みる', past: 'みました', te: 'みて', pot: 'みられる' },
-  hiku: { n: 'ひく', past: 'ひきました', te: 'ひいて', pot: 'ひける' },
-  oyogu: { n: 'およぐ', past: 'およぎました', te: 'およいで', pot: 'およげる' },
+  suru: { n: 'する', past: 'しました', te: 'して', pot: 'できる', tai: 'したい' },
+  utau: { n: 'うたう', past: 'うたいました', te: 'うたって', pot: 'うたえる', tai: 'うたいたい' },
+  odoru: { n: 'おどる', past: 'おどりました', te: 'おどって', pot: 'おどれる', tai: 'おどりたい' },
+  ensou: { n: 'えんそうする', past: 'えんそうしました', te: 'えんそうして', pot: 'えんそうできる', tai: 'えんそうしたい' },
+  taberu: { n: 'たべる', past: 'たべました', te: 'たべて', pot: 'たべられる', tai: 'たべたい' },
+  kaku: { n: 'かく', past: 'かきました', te: 'かいて', pot: 'かける', tai: 'かきたい' },
+  yomu: { n: 'よむ', past: 'よみました', te: 'よんで', pot: 'よめる', tai: 'よみたい' },
+  tsukuru: { n: 'つくる', past: 'つくりました', te: 'つくって', pot: 'つくれる', tai: 'つくりたい' },
+  oru: { n: 'おる', past: 'おりました', te: 'おって', pot: 'おれる', tai: 'おりたい' },
+  hashiru: { n: 'はしる', past: 'はしりました', te: 'はしって', pot: 'はしれる', tai: 'はしりたい' },
+  asobu: { n: 'あそぶ', past: 'あそびました', te: 'あそんで', pot: 'あそべる', tai: 'あそびたい' },
+  miru: { n: 'みる', past: 'みました', te: 'みて', pot: 'みられる', tai: 'みたい' },
+  hiku: { n: 'ひく', past: 'ひきました', te: 'ひいて', pot: 'ひける', tai: 'ひきたい' },
+  oyogu: { n: 'およぐ', past: 'およぎました', te: 'およいで', pot: 'およげる', tai: 'およぎたい' },
 };
 function wordInfo(w) {
   const d = SLOTS.nani.w.find(x => x[0] === w);
@@ -539,11 +567,11 @@ function verbPart(tok, t) {
 }
 const partText = (p, i, t, blank) => p[0] === '@' ? (mk.vals[i] || blank) : p[0] === '#' ? verbPart(p, t) : p;
 const TPLS = [
-  { id: 'gamba', em: '💪', name: 'がんばったこと', parts: ['@itsu', '、', '@nani', 'を', '@how', 'がんばりました。'] },
+  { id: 'gamba', em: '💪', name: 'がんばったこと', parts: ['@itsu', '、', '@nani', 'を', '@how', '@gend'] },
   { id: 'tano', em: '😊', name: 'たのしかったこと', parts: ['@itsu', '、', '@dare', 'と', '@nani', '#past', '。', '@feel'] },
   { id: 'deki', em: '⭐', name: 'できるようになったこと', parts: ['@nani', '#potp', '@how2', '#potv', 'ようになりました。'] },
   { id: 'omoi', em: '💭', name: 'おもったこと', parts: ['@nani', '#te', '、', '@feel2', 'とおもいました。'] },
-  { id: 'tsugi', em: '🚀', name: 'つぎに がんばりたいこと', parts: ['つぎは、', '@nani', 'を', '@how', 'がんばりたいです。'] },
+  { id: 'tsugi', em: '🚀', name: 'つぎに がんばりたいこと', parts: ['つぎは、', '@nani', 'を', '@how', '@tend'] },
   { id: 'jiyu', em: '✍️', name: 'じゆうに かく', parts: [] },
 ];
 let mk = { tpl: 'gamba', vals: {}, active: null, free: '' };
@@ -560,7 +588,7 @@ function sentenceComplete() {
 }
 function renderMake() {
   const tl = $('#tplList'); tl.innerHTML = '';
-  TPLS.forEach(t => tl.append(el('button', { class: 'tpl' + (t.id === mk.tpl ? ' on' : ''), onclick: () => { mk = { tpl: t.id, vals: {}, active: null, free: '' }; renderMake(); } },
+  TPLS.forEach(t => tl.append(el('button', { class: 'tpl' + (t.id === mk.tpl ? ' on' : ''), onclick: () => { mk = P().mk = { tpl: t.id, vals: {}, active: null, free: '' }; saveDB(); renderMake(); } },
     el('span', { class: 'em' }, t.em), t.name)));
   renderFrame(); renderDoc();
 }
@@ -596,11 +624,26 @@ function renderChooser(key, idx) {
     if (S().speakPick) speak(w);
     mk.vals[idx] = w;
     const t = TPLS.find(t => t.id === mk.tpl);
+    // 「なにを」を かえたら、それに あわせた ぶんまつを えらびなおす
+    if (key === 'nani') t.parts.forEach((p, i) => { if (p === '@gend' || p === '@tend') delete mk.vals[i]; });
     const next = t.parts.findIndex((p, i) => p[0] === '@' && !mk.vals[i]);
     mk.active = next >= 0 ? next : null;
     renderFrame();
   };
-  slot.w.forEach(([w, em]) => box.append(el('button', { class: 'chip', onclick: () => pick(w) }, el('span', { class: 'em' }, em), w)));
+  let words = slot.w;
+  if (key === 'gend' || key === 'tend') {
+    const t = TPLS.find(t => t.id === mk.tpl), nw = mk.vals[t.parts.indexOf('@nani')];
+    const vk = nw ? wordInfo(nw).v : null, V = VERBS[vk] || null;
+    words = [];
+    if (V) {
+      if (key === 'gend') { words.push([V.past + '。', '✅']); if (vk !== 'suru') words.push(['がんばって' + V.past + '。', '💪']); words.push(['がんばりました。', '💪']); }
+      else { words.push([V.tai + 'です。', '✨']); if (vk !== 'suru') words.push(['がんばって' + V.tai + 'です。', '💪']); words.push(['がんばりたいです。', '💪']); }
+    } else {
+      ch.append(el('div', { class: 'hint' }, 'さきに「なにを？」を えらぶと、あう ことばが でます。'));
+      words = key === 'gend' ? [['がんばりました。', '💪']] : [['がんばりたいです。', '💪']];
+    }
+  }
+  words.forEach(([w, em]) => box.append(el('button', { class: 'chip', onclick: () => pick(w) }, el('span', { class: 'em' }, em), w)));
   const mine = (P().words[key] || []);
   mine.forEach(w => {
     box.append(el('button', { class: 'chip mine', onclick: () => pick(w) }, w));
@@ -620,6 +663,7 @@ function renderChooser(key, idx) {
     } }, '＋ ことばを ふやす')));
 }
 function renderPreview() {
+  P().mk = mk;
   const t = TPLS.find(t => t.id === mk.tpl);
   const s = t.id === 'jiyu' ? sentenceText() : t.parts.map((p, i) => partText(p, i, t, '〇〇')).join('');
   $('#sentPreview').textContent = s || '（ことばを えらぶと ここに でます）';
@@ -641,11 +685,11 @@ $('#btnAddSent').addEventListener('click', () => {
   if (!sentenceComplete()) return;
   P().doc.push(sentenceText()); saveDB();
   mk.vals = {}; mk.active = null; mk.free = '';
-  renderFrame(); renderDoc(); toast('いれました！');
+  renderFrame(); renderDoc(); if (saveDB()) toast('いれました！');
 });
 $('#btnClearSlots').addEventListener('click', () => { mk.vals = {}; mk.active = null; mk.free = ''; renderFrame(); });
 $('#btnApplyEdit').addEventListener('click', () => {
-  P().doc = $('#docEdit').value.split('\n').map(s => normText(s.trim())).filter(Boolean); saveDB(); renderDoc(); toast('なおしました');
+  P().doc = $('#docEdit').value.split('\n').map(s => normText(s.trim())).filter(Boolean); renderDoc(); if (saveDB()) toast('なおしました');
 });
 $('#btnClearDoc').addEventListener('click', function () {
   if (this.dataset.c !== '1') { this.dataset.c = '1'; this.textContent = 'ほんとうに けす？'; setTimeout(() => { this.dataset.c = ''; this.textContent = 'ぜんぶ けす'; }, 3000); return; }
@@ -746,13 +790,36 @@ const LONG_SENT = 12;
 const splitBy = (s, re) => (s.match(re) || []).map(x => x.trim()).filter(Boolean);
 function splitSentences(doc) { return doc.flatMap(line => splitBy(line, /[^。！？]+[。！？]*|[。！？]+/g)); }
 const splitTen = s => splitBy(s, /[^、。！？]+[、。！？]*|[、。！？]+/g);
+// せんせいが きめた くぎり（ぶんしょう ぜんたいの なんもじめの あとで くぎるか）。ぶんしょうが かわったら つかわない
+function teacherCuts() { const t = P().doc.join('\n'); return P().cutsText === t ? new Set(P().cuts || []) : new Set(); }
 function typingChunks() {
-  const doc = P().doc, c = S().chunk;
-  if (c === 'all') return [doc.join('\n')];
-  const sents = splitSentences(doc);
-  if (c === 'sent') return sents;
-  if (c === 'ten') return sents.flatMap(splitTen);
-  return sents.flatMap(s => s.length > LONG_SENT ? splitTen(s) : [s]);
+  const doc = P().doc, c = S().chunk, text = doc.join('\n');
+  if (c === 'all') return [text];
+  const cuts = teacherCuts(), END = '。！？';
+  // まず 1ぶんずつ（はじまりの いちも おぼえる）
+  const sents = [];
+  let cur = '', off = 0;
+  const flush = () => { if (cur.trim()) sents.push({ s: cur, off }); cur = ''; };
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '\n') { flush(); continue; }
+    if (!cur) off = i;
+    cur += ch;
+    if (END.includes(ch) && !END.includes(text[i + 1] || '')) flush();
+  }
+  flush();
+  const out = [];
+  sents.forEach(({ s, off }) => {
+    const ten = c === 'ten' || (c === 'auto' && s.length > LONG_SENT);
+    let piece = '';
+    for (let j = 0; j < s.length; j++) {
+      piece += s[j];
+      const next = s[j + 1] || '';
+      if (cuts.has(off + j) || (ten && s[j] === '、' && next !== '、')) { if (piece.trim()) out.push(piece.trim()); piece = ''; }
+    }
+    if (piece.trim()) out.push(piece.trim());
+  });
+  return out;
 }
 function startTyping() {
   const sents = typingChunks();
@@ -764,6 +831,7 @@ function startTyping() {
   $('#optInput').value = S().input;
   $('#optBig').checked = S().showBig;
   $('#optChunk').value = S().chunk;
+  $('#optAdvance').value = S().advance;
   $('#lblFinger').hidden = KANA_MODE();
 }
 function skipAuto() { while (ty.ui < ty.units.length && ty.units[ty.ui].skip) ty.ui++; if (ty.ui >= ty.units.length) finishTyping(); }
@@ -836,7 +904,8 @@ function renderBig() {
     // すこし まって つぎの まとまりへ すすむ（ボタンでも すすめる）
     clearTimeout(ty.timer);
     const si = ty.si;
-    ty.timer = setTimeout(() => { if (ty.si === si) nextSentence(); }, 900);
+    const wait = { auto09: 900, auto2: 2000 }[S().advance];
+    if (wait) ty.timer = setTimeout(() => { if (ty.si === si) nextSentence(); }, wait);
     b.append(el('div', { class: 'done-box' }, '⭐ できた！',
       el('div', { class: 'row', style: 'justify-content:center;margin-top:10px' },
         el('button', { class: 'btn main', onclick: nextSentence }, 'つぎへ ▶'))));
@@ -881,7 +950,9 @@ function renderKB() {
       let cls = 'key' + (k === ' ' ? ' space' : '') + (k === nk ? ' next' : '');
       if (S().finger && FINGER[k] !== undefined) cls += ' f' + FINGER[k];
       const b = el('button', { class: cls, 'data-k': k, 'aria-label': KEY_SHOW[k] || k }, keyLabel(k));
-      b.addEventListener('pointerdown', e => { e.preventDefault(); press(k); });
+      b.addEventListener('pointerdown', e => { e.preventDefault(); b._pd = Date.now(); press(k); });
+      // そとづけ キーボード・VoiceOver・スイッチコントロールの「けってい」でも おせる
+      b.addEventListener('click', () => { if (b._pd) { b._pd = 0; return; } press(k); });
       r.append(b);
     });
     if (ri === 2) r.append(el('div', { style: 'flex:.6 1 0' }));
@@ -981,14 +1052,17 @@ function renderKanaKB(kb) {
       if (!k) { c.append(el('div', { class: 'key ghost' })); return; }
       const lab = k === 'MOD' ? '小゛゜' : k;
       const b = el('button', { class: 'key' + (k === 'MOD' ? ' fn' : '') + (k === nk ? ' next' : ''), 'data-k': k, 'aria-label': lab }, lab);
-      b.addEventListener('pointerdown', e => { e.preventDefault(); press(k); });
+      b.addEventListener('pointerdown', e => { e.preventDefault(); b._pd = Date.now(); press(k); });
+      // そとづけ キーボード・VoiceOver・スイッチコントロールの「けってい」でも おせる
+      b.addEventListener('click', () => { if (b._pd) { b._pd = 0; return; } press(k); });
       c.append(b);
     });
     grid.append(c);
   });
   kb.append(grid);
   const sp = el('button', { class: 'key space' + (nk === ' ' ? ' next' : ''), 'data-k': ' ' }, 'くうはく');
-  sp.addEventListener('pointerdown', e => { e.preventDefault(); press(' '); });
+  sp.addEventListener('pointerdown', e => { e.preventDefault(); sp._pd = Date.now(); press(' '); });
+  sp.addEventListener('click', () => { if (sp._pd) { sp._pd = 0; return; } press(' '); });
   kb.append(el('div', { class: 'kr' }, el('div', { style: 'flex:2 1 0' }), sp, el('div', { style: 'flex:2 1 0' })));
 }
 $('#optInput').addEventListener('change', e => { S().input = e.target.value; saveDB(); startTyping(); });
@@ -996,6 +1070,30 @@ $('#btnTypeRestart').addEventListener('click', startTyping);
 $('#btnSpeakNow').addEventListener('click', () => speak((ty && ty.sents[ty.si]) || P().doc.join('')));
 $('#optFinger').addEventListener('change', e => { S().finger = e.target.checked; saveDB(); renderKB(); });
 $('#optGuide').addEventListener('change', e => { S().guide = +e.target.value; saveDB(); renderTarget(); renderBig(); renderKB(); });
+$('#optAdvance').addEventListener('change', e => { S().advance = e.target.value; saveDB(); });
+// せんせいが くぎりを なおす：もじの あとを タップすると そこで くぎる
+$('#btnCuts').addEventListener('click', () => {
+  const text = P().doc.join('\n');
+  if (!text) return toast('①で ぶんを つくってね');
+  if (P().cutsText !== text) { P().cuts = []; P().cutsText = text; }
+  const box = el('div', { class: 'cutbox' });
+  const draw = () => {
+    box.innerHTML = '';
+    const cuts = new Set(P().cuts);
+    [...text].forEach((ch, i) => {
+      if (ch === '\n') { box.append(el('div', { style: 'flex-basis:100%;height:0' })); return; }
+      const b = el('button', { class: 'cutch' + (cuts.has(i) ? ' cut' : ''), 'aria-label': ch + ' の あとで くぎる' }, ch);
+      b.addEventListener('click', () => { cuts.has(i) ? cuts.delete(i) : cuts.add(i); P().cuts = [...cuts].sort((a, z) => a - z); saveDB(); draw(); });
+      box.append(b);
+    });
+  };
+  draw();
+  const m = openModal(el('div', { class: 'regtitle' }, '✂ くぎりを なおす'),
+    el('p', { class: 'hint' }, 'もじを タップすると、その もじの あとで くぎります（あかい たてせん）。もういちど タップで もとに もどります。'),
+    box,
+    el('div', { class: 'row' }, el('button', { class: 'btn small', onclick: () => { P().cuts = []; saveDB(); draw(); } }, 'くぎりを ぜんぶ けす'),
+      el('button', { class: 'btn main', onclick: () => { m.remove(); startTyping(); } }, '✓ おわる')));
+});
 $('#optChunk').addEventListener('change', e => { S().chunk = e.target.value; saveDB(); startTyping(); });
 $('#optBig').addEventListener('change', e => { S().showBig = e.target.checked; saveDB(); renderBig(); });
 $('#optSound').addEventListener('change', e => { S().sound = e.target.checked; saveDB(); });
@@ -1065,6 +1163,8 @@ let brMode = false; // かいぎょうを なおす モード
 // ひとを かえたら、そのひとの しあげかた（フォント・むき など）に きりかえる
 function bindProfile() {
   fin = P().fin = Object.assign({}, FIN_DEF, P().fin); fin.hi = 0; fin.page = 0;
+  // つくりかけの ぶんも ひとごとに
+  mk = P().mk = Object.assign({ tpl: 'gamba', vals: {}, active: null, free: '' }, P().mk);
   if (P().fin && P().fin.grid === false && !P().fin.gstyle) fin.gstyle = 'none';
 }
 const CELL = 80, MARGIN = 48;
@@ -1092,7 +1192,7 @@ const pitchOf = o => CELL * (o.gstyle === 'genko' ? 1.3 : o.gstyle === 'line' ? 
 function layoutAll(o, text) {
   const cols = o.cols, lines = [], br = new Set(o.breaks || []);
   const meta = s => [...s].slice(0, cols).map(ch => ({ ch, n: -1 }));
-  const nameLine = () => { const n = meta(P().name.trim()); return Array(cols - n.length).fill({ ch: ' ', n: -1 }).concat(n); };
+  const nameLine = () => { const n = meta((o.nameText || P().name).trim()); return Array(cols - n.length).fill({ ch: ' ', n: -1 }).concat(n); };
   if (o.title && o.title.trim()) lines.push(meta('  ' + o.title.trim()));
   if (o.name && o.title && o.title.trim()) lines.push(nameLine());
   const paras = o.sentBreak === false ? [text.replace(/\n/g, '')] : text.split('\n');
@@ -1186,7 +1286,8 @@ function renderSheet(cv, o, text, opt = {}) {
   ctx.setTransform(k * s, 0, 0, k * s, k * ox, k * oy);
   drawGrid(ctx, g, o);
   const missing = new Set();
-  const glyphs = opt.glyphs || P().glyphs;
+  // ほぞんした さくひんは、ほぞんした ときの もじを つかう（あとで もじを かきなおしても かわらない）
+  const glyphs = opt.glyphs || o.glyphs || P().glyphs;
   const fs = CELL * (o.size || 0.72);
   const fontPaint = (family, color) => (c, ch, x, y) => {
     c.fillStyle = color; c.font = `${fs}px ${family}`; c.textAlign = 'center'; c.textBaseline = 'middle';
@@ -1484,6 +1585,12 @@ $('#btnPrint').addEventListener('click', async () => {
 $('#btnSaveWork').addEventListener('click', () => {
   if (!finText()) return toast('①で ぶんを つくってね');
   const w = Object.assign({ id: 'w' + Date.now(), date: new Date().toISOString(), text: finText() }, JSON.parse(JSON.stringify(fin)));
+  w.nameText = P().name;
+  if (fin.mode === 'glyph') {
+    const used = new Set([...w.text, ...(fin.title || ''), ...P().name]), g = {};
+    used.forEach(c => { if (P().glyphs[c]) g[c] = P().glyphs[c]; });
+    w.glyphs = JSON.parse(JSON.stringify(g));
+  }
   if (fin.mode === 'hand') w.hand = JSON.parse(JSON.stringify(handChars()));
   P().works.unshift(w);
   if (saveDB()) { toast('ほぞんしました'); renderWorks(); } else P().works.shift();
@@ -1526,7 +1633,7 @@ function openWork(w) {
   Object.keys(FIN_DEF).forEach(k => { if (w[k] !== undefined && k !== 'hi') fin[k] = JSON.parse(JSON.stringify(w[k])); });
   fin.page = 0;
   P().hand = w.hand && !Array.isArray(w.hand) ? JSON.parse(JSON.stringify(w.hand)) : {}; fin.hi = 0;
-  saveDB(); renderFinish(); window.scrollTo(0, 0); toast('ひらきました');
+  renderFinish(); window.scrollTo(0, 0); if (saveDB()) toast('ひらきました');
 }
 
 // ===== もじとうろく =====
@@ -1622,15 +1729,16 @@ function renderSetting() {
   $('#optCase').value = S().keyCase;
   $('#optSpeakPick').checked = S().speakPick;
   $('#btnDownload').hidden = IN_FRAME;
+  $('#btnUndoReplace').hidden = !DB.replacedBackup;
 }
 $('#optRomaji').addEventListener('change', e => { S().romaji = e.target.value; saveDB(); });
 $('#optCase').addEventListener('change', e => { S().keyCase = e.target.value; saveDB(); });
 $('#optSpeakPick').addEventListener('change', e => { S().speakPick = e.target.checked; saveDB(); });
-$('#btnProfRename').addEventListener('click', () => { const n = $('#profName').value.trim(); if (!n) return; P().name = n; saveDB(); renderWho(); toast('かえました'); });
+$('#btnProfRename').addEventListener('click', () => { const n = $('#profName').value.trim(); if (!n) return; P().name = n; renderWho(); if (saveDB()) toast('かえました'); });
 $('#btnProfAdd').addEventListener('click', () => {
   const n = $('#profName').value.trim();
   const p = newProfile(n && n !== P().name ? n : 'あたらしいひと' + (DB.profiles.length + 1));
-  DB.profiles.push(p); DB.current = p.id; bindProfile(); saveDB(); renderWho(); renderSetting(); toast(p.name + ' を ついか しました');
+  DB.profiles.push(p); DB.current = p.id; bindProfile(); renderWho(); renderSetting(); if (saveDB()) toast(p.name + ' を ついか しました');
 });
 $('#btnProfDel').addEventListener('click', function () {
   if (DB.profiles.length <= 1) return toast('さいごの ひとりは けせません');
@@ -1650,15 +1758,51 @@ $('#btnDownload').addEventListener('click', () => {
   const a = el('a', { href: URL.createObjectURL(new Blob([exportCode()], { type: 'application/json' })), download: `bunsho-${P().name}.json` });
   document.body.append(a); a.click(); a.remove();
 });
+// よみこむ データを しらべて、へんな ところを とりのぞく
+function cleanProfile(src) {
+  if (!src || typeof src !== 'object') return null;
+  const obj = v => v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+  const arr = v => Array.isArray(v) ? v : [];
+  const isStroke = s => Array.isArray(s) && s.every(p => Array.isArray(p) && p.length === 2 && p.every(n => typeof n === 'number' && isFinite(n)));
+  const glyphs = {};
+  Object.entries(obj(src.glyphs)).forEach(([c, st]) => { if (typeof c === 'string' && c.length === 1 && Array.isArray(st) && st.every(isStroke)) glyphs[c] = st; });
+  const words = {};
+  Object.entries(obj(src.words)).forEach(([k, l]) => { if (SLOTS[k]) words[k] = arr(l).filter(w => typeof w === 'string').map(w => normText(w).slice(0, 30)); });
+  const p = newProfile(typeof src.name === 'string' && src.name.trim() ? src.name.trim().slice(0, 30) : 'よみこんだひと');
+  if (typeof src.id === 'string') p.id = src.id;
+  Object.assign(p, {
+    glyphs, words, wordVerb: obj(src.wordVerb),
+    doc: arr(src.doc).filter(s => typeof s === 'string'),
+    works: arr(src.works).filter(w => w && typeof w.text === 'string' && typeof w.mode === 'string'),
+    hand: obj(src.hand), settings: Object.assign({}, DEF_SET, obj(src.settings)), fin: obj(src.fin), mk: obj(src.mk),
+  });
+  return p;
+}
 function importText(txt) {
   let o; try { o = JSON.parse(txt); } catch (e) { return toast('コードが よみこめません'); }
   if (!o || o.app !== 'bunsho-maker' || !o.profile) return toast('文章メーカーの コードでは ありません');
-  const p = Object.assign(newProfile(o.profile.name || 'よみこんだひと'), o.profile);
+  const p = cleanProfile(o.profile);
+  if (!p) return toast('コードの なかみが こわれています');
+  const finish = msg => { DB.current = p.id; bindProfile(); if (saveDB()) toast(msg); renderWho(); renderSetting(); };
   const i = DB.profiles.findIndex(x => x.id === p.id);
-  if (i >= 0) DB.profiles[i] = p; else DB.profiles.push(p);
-  p.settings = Object.assign({}, DEF_SET, p.settings);
-  DB.current = p.id; bindProfile(); saveDB(); renderWho(); renderSetting(); toast(p.name + ' を よみこみました');
+  if (i < 0) { DB.profiles.push(p); return finish(p.name + ' を よみこみました'); }
+  // おなじ ひとの データが ある ときは、えらんでもらう
+  const old = DB.profiles[i];
+  const m = openModal(el('div', { class: 'regtitle' }, '「' + old.name + '」の データが もう あります'),
+    el('p', { class: 'hint' }, `いま：もじ ${Object.keys(old.glyphs || {}).length}こ・さくひん ${(old.works || []).length}こ　／　よみこむ：もじ ${Object.keys(p.glyphs).length}こ・さくひん ${p.works.length}こ`),
+    el('div', { class: 'row' },
+      el('button', { class: 'btn main', onclick: () => { m.remove(); p.id = newProfile('').id; p.name += '（よみこみ）'; DB.profiles.push(p); finish(p.name + ' として ついか しました'); } }, 'べつの ひととして ついか'),
+      el('button', { class: 'btn warn', onclick: () => { m.remove(); DB.replacedBackup = { date: new Date().toISOString(), profile: old }; DB.profiles[i] = p; finish('おきかえました（まえの データは「もとに もどす」で もどせます）'); } }, 'いまの データを おきかえる'),
+      el('button', { class: 'btn', onclick: () => m.remove() }, 'やめる')));
 }
+// おきかえる まえの データに もどす
+$('#btnUndoReplace').addEventListener('click', () => {
+  const bk = DB.replacedBackup; if (!bk) return toast('もどせる データは ありません');
+  const i = DB.profiles.findIndex(x => x.id === bk.profile.id);
+  if (i >= 0) DB.profiles[i] = bk.profile; else DB.profiles.push(bk.profile);
+  delete DB.replacedBackup; DB.current = bk.profile.id; bindProfile();
+  if (saveDB()) toast('まえの データに もどしました'); renderWho(); renderSetting();
+});
 $('#btnImport').addEventListener('click', () => importText($('#exportBox').value.trim()));
 $('#fileImport').addEventListener('change', e => { const f = e.target.files[0]; if (!f) return; f.text().then(importText); e.target.value = ''; });
 
