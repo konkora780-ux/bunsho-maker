@@ -90,33 +90,118 @@ test('P1-2 へんな データ・おおきすぎる データを よみこんで
       set: [S().guide, S().input, SH().tpls], mk: mk.tpl, docSrc: Object.keys(p.docSrc).length };
   });
   eq(r.name, 'へん'); eq(r.fin, ['font', 0, 10, 0, 'free', [3]]); eq(r.glyphs, []); eq(r.work, [1, 'font', 0, 10]);
-  eq(r.set, [2, 'kana', []]); eq(r.mk, 'gamba'); eq(r.docSrc, 0);
+  eq(r.set, [2, 'kana', ['gamba']]); eq(r.mk, 'gamba'); eq(r.docSrc, 0);
+  ok((await pg.textContent('.modal')).includes('なおした こと'), 'なおした ことを しらせる');
+  await pg.click('.modal >> text=わかった');
   await pg.click('#steps button[data-v=finish]'); await pg.click('#steps button[data-v=make]');
   eq(await pg.evaluate(() => DB.profiles.length), 2);
-  const big = await pg.evaluate(() => { const n = DB.profiles.length; importText(JSON.stringify({ app: 'bunsho-maker', profile: { name: 'x', doc: ['あ'.repeat(9e6)] } })); return DB.profiles.length === n; });
+  const big = await pg.evaluate(() => { const n = DB.profiles.length; importText(JSON.stringify({ app: 'bunsho-maker', profile: { name: 'x', doc: ['あ'.repeat(IMPORT_MAX)] } })); return DB.profiles.length === n; });
   ok(big, 'おおきすぎる コードは よみこまない');
   eq(await pg.evaluate(() => { const n = DB.profiles.length; importText('{"app":"bunsho-maker","v":99,"profile":{}}'); return DB.profiles.length === n; }), true, 'あたらしすぎる コード');
   noErr(pg);
 });
 
-test('P1-2 こわれた ほぞん データは けさずに とっておく', async b => {
+// こわれた データの のこりかた（.broken. で はじまる キーの なかみ）
+const brokenOf = k => { const r = []; for (let i = 0; i < localStorage.length; i++) { const x = localStorage.key(i); if (x.startsWith(k + '.broken')) r.push(localStorage.getItem(x)); } return r.sort(); };
+test('再P0-2 こわれた データ（よめない・なかみが へん）は けさずに なんかいぶんでも のこす', async b => {
   const pg = await openPage(b);
+  // 1) JSON として よめない
   await pg.evaluate(k => localStorage.setItem(k, '{こわれた'), KEY);
   await pg.reload();
-  eq(await pg.evaluate(k => [localStorage.getItem(k + '.broken'), BROKEN], KEY), ['{こわれた', '{こわれた']);
+  eq(await pg.evaluate(brokenOf, KEY), ['{こわれた']);
   await pg.click('#steps button[data-v=setting]'); ok(await pg.isVisible('#brokenBox'));
-  // とっておく ばしょが ない ときは、うわがき しない
+  // 2) JSON は よめるが なかみが へん（profiles:[null,3]）→ もとの まま のこし、まえの ものも けさない
+  const raw2 = '{"profiles":[null,3],"current":"x"}';
+  await pg.evaluate(([k, r]) => localStorage.setItem(k, r), [KEY, raw2]);
+  await pg.reload();
+  const r2 = { list: await pg.evaluate(brokenOf, KEY), fixes: await pg.evaluate(() => LOAD_FIXES.length), blocked: await pg.evaluate(() => saveBlocked) };
+  eq(r2.list, [raw2, '{こわれた'].sort()); ok(r2.fixes > 0, 'なおした ことを しらせる'); eq(r2.blocked, false);
+  // 3) いちぶの ひとだけ へん → よい ひとは つかえる、もとの データは のこる
+  const good = await pg.evaluate(() => JSON.stringify(P()));
+  const raw3 = JSON.stringify({ profiles: [JSON.parse(good), 'x'], current: JSON.parse(good).id });
+  await pg.evaluate(([k, r]) => localStorage.setItem(k, r), [KEY, raw3]);
+  await pg.reload();
+  eq([await pg.evaluate(() => DB.profiles.length), (await pg.evaluate(brokenOf, KEY)).length], [1, 3]);
+  // 4) ふつうの データでは なにも のこさない・しらせない
+  await pg.evaluate(() => saveDB()); await pg.reload();
+  eq(await pg.evaluate(() => [LOAD_FIXES.length, saveBlocked]), [0, false]);
+  // 5) ひとつずつ とりだして けす。ぜんぶ けすと おしらせが きえる
+  await pg.click('#steps button[data-v=setting]');
+  eq(await pg.$$eval('#brokenBox .row', es => es.length), 3);
+  const [dl] = await Promise.all([pg.waitForEvent('download'), pg.locator('#brokenBox button', { hasText: 'とりだす' }).first().click()]);
+  ok(dl.suggestedFilename().startsWith('bunsho-broken-'));
+  for (let i = 0; i < 3; i++) { const d = pg.locator('#brokenBox button.warn').first(); await d.click(); await d.click(); }
+  ok(!(await pg.isVisible('#brokenBox')), 'ぜんぶ けしたら かくれる');
+  noErr(pg);
+});
+
+test('再P0-2 のこせない・よみだせない ときは ほぞんを とめて もとの データを まもる', async b => {
+  const pg = await openPage(b);
   const ctx = pg.context();
   const pg2 = await ctx.newPage(); pg2.errs = []; pg2.on('pageerror', e => pg2.errs.push(e.message));
-  await pg2.addInitScript(() => { const o = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { if (k.endsWith('.broken')) throw new Error('quota'); return o.call(this, k, v); }; });
-  await pg2.evaluate(k => { localStorage.removeItem(k + '.broken'); localStorage.setItem(k, '{こわれた2'); }, KEY).catch(() => {});
+  await pg2.addInitScript(() => { const o = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { if (k.includes('.broken')) throw new Error('quota'); return o.call(this, k, v); }; });
   await pg2.goto(pg.url());
-  await pg2.evaluate(k => { localStorage.removeItem(k + '.broken'); localStorage.setItem(k, '{こわれた2'); }, KEY);
-  await pg2.reload();
-  await pg2.click('.tpl >> text=じゆうに'); await pg2.fill('#freeText', 'あい'); await pg2.click('#btnAddSent');
-  eq(await pg2.evaluate(k => [localStorage.getItem(k), saveBlocked], KEY), ['{こわれた2', true]);
-  ok(await pg2.isVisible('#saveErr'));
-  noErr(pg); eq(pg2.errs, []);
+  for (const raw of ['{こわれた2', '{"profiles":[null]}']) {
+    await pg2.evaluate(([k, r]) => { localStorage.setItem(k, r); }, [KEY, raw]);
+    await pg2.reload();
+    await pg2.click('.tpl >> text=じゆうに'); await pg2.fill('#freeText', 'あい'); await pg2.click('#btnAddSent');
+    eq(await pg2.evaluate(k => [localStorage.getItem(k), saveBlocked], KEY), [raw, true], raw);
+    ok(await pg2.isVisible('#saveErr'));
+    // さいきどう しても まもる
+    await pg2.reload();
+    eq(await pg2.evaluate(k => [localStorage.getItem(k), saveBlocked], KEY), [raw, true], 'さいきどう ' + raw);
+  }
+  // よみだし そのものが できない
+  const pg3 = await ctx.newPage(); pg3.errs = []; pg3.on('pageerror', e => pg3.errs.push(e.message));
+  await pg3.addInitScript(() => { Storage.prototype.getItem = function () { throw new Error('read'); }; });
+  await pg3.goto(pg.url());
+  eq(await pg3.evaluate(() => [saveBlocked, saveDB()]), [true, false]);
+  noErr(pg); eq(pg2.errs, []); eq(pg3.errs, []);
+});
+
+test('再P0-2 よみこみの うえかぎり：かきだした コードは よみこめ、けずった ものは しらせる', async b => {
+  const pg = await openPage(b);
+  const r = await pg.evaluate(() => {
+    // おおきめの ぶんしょう（1000ぎょう×2000もじ ちかく）でも おなじ ものが もどる
+    const p = P(); p.doc = Array.from({ length: 300 }, (_, i) => 'あ'.repeat(1000) + i);
+    p.works = Array.from({ length: 400 }, (_, i) => ({ id: 'w' + i, date: '', text: 'あいう', mode: 'font' }));
+    const code = exportCode(), back = parseCode(code);
+    const same = JSON.stringify(back.ps[0].doc) === JSON.stringify(p.doc) && back.ps[0].works.length === 400 && back.fixes.length === 0;
+    // うえかぎりを こえた ものは けずって しらせる
+    const over = parseCode(JSON.stringify({ app: 'bunsho-maker', v: 2, profile: { name: 'x', doc: Array.from({ length: 1200 }, () => 'あ'), works: [{ text: '' }, 3] } }));
+    return { same, fixes: over.fixes };
+  });
+  eq(r.same, true, 'かきだした ものが そのまま もどる');
+  ok(r.fixes.some(x => x.includes('ぶん 200こ')), r.fixes.join('/'));
+  ok(r.fixes.some(x => x.includes('さくひん 2こ')), r.fixes.join('/'));
+  // よみこみで なおした ときは ダイアログで しらせる
+  await pg.evaluate(() => importText(JSON.stringify({ app: 'bunsho-maker', v: 2, profiles: [{ name: 'a', id: 'pa' }, null] })));
+  ok((await pg.textContent('.modal')).includes('こわれていて よみこめませんでした'));
+  noErr(pg);
+});
+
+test('再P0-1 ぶんの かた・しあげかたが 0こ でも こわれない（よみこみ・きどう・じどうせいと モード）', async b => {
+  const pg = await openPage(b);
+  // よみこみ：tpls:[]・ぜんぶ ふせいな id・modes:[]
+  const r = await pg.evaluate(() => {
+    const out = [];
+    for (const show of [{ tpls: [], modes: [] }, { tpls: ['nai', 'x'], modes: ['zzz'] }]) {
+      const res = parseCode(JSON.stringify({ app: 'bunsho-maker', v: 2, profile: { name: 'a', settings: { show } } }));
+      out.push([res.ps[0].settings.show.tpls, res.ps[0].settings.show.modes, res.fixes.length]);
+    }
+    return out;
+  });
+  eq(r, [[['gamba'], ['font'], 2], [['gamba'], ['font'], 2]]);
+  // きどう：ほぞん データに tpls:[] が はいっていても、じどうせいと モードで ひらける
+  await pg.evaluate(k => { saveDB(); const d = JSON.parse(localStorage.getItem(k)); d.profiles[0].settings = { show: { tpls: [], modes: [] } }; d.role = 'student'; localStorage.setItem(k, JSON.stringify(d)); }, KEY);
+  await pg.reload();
+  eq(await pg.$$eval('.tpl', es => es.map(e => e.textContent)), ['💪がんばったこと']);
+  await pg.click('#steps button[data-v=finish]');
+  eq(await pg.$$eval('.mode', es => es.filter(e => !e.hidden).map(e => e.dataset.m)), ['font']);
+  // がめんの とちゅうで 0こ に なっても（ないぶの じょうたい）こわれない
+  await pg.evaluate(() => { SH().tpls = []; SH().modes = []; show('make'); show('finish'); });
+  eq(await pg.$$eval('.mode', es => es.filter(e => !e.hidden).map(e => e.dataset.m)), ['font']);
+  noErr(pg);
 });
 
 test('P0-2 さくひんは ほぞんした ときの もじ・なまえの まま（いちらん・ひらく・PDF・まとめPDF）', async b => {

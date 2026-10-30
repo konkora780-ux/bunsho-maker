@@ -29,21 +29,41 @@ const S = () => P().settings || (P().settings = Object.assign({}, DEF_SET));
 function newProfile(name) {
   return { id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name, glyphs: {}, words: {}, doc: [], works: [] };
 }
-// よみこめない データは けさずに BROKEN_KEY へ うつす。うつせない ときは、うわがき しないよう ほぞんを とめる
-const BROKEN_KEY = STORE_KEY + '.broken';
-let BROKEN = null, saveBlocked = false;
+// こわれた データは けさずに「.broken.じこく」に のこす（なんかいぶんでも。まえの ものを うわがき しない）。
+// のこせない・よみだせない ときは、もとの データを うわがき しないよう ほぞんを とめる
+const BROKEN_PREFIX = STORE_KEY + '.broken';
+let saveBlocked = false, LOAD_FIXES = [];
+function brokenKeys() {
+  const ks = [];
+  try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith(BROKEN_PREFIX)) ks.push(k); } } catch (e) {}
+  return ks.sort();
+}
+function keepBroken(raw) {
+  try {
+    if (brokenKeys().some(k => localStorage.getItem(k) === raw)) return true;
+    let k = BROKEN_PREFIX + '.' + Date.now(); while (localStorage.getItem(k) !== null) k += '_';
+    localStorage.setItem(k, raw); return true;
+  } catch (e) { saveBlocked = true; return false; }
+}
+// ひとの データとして つかえない もの（null・かず・はいれつ・id が ない）
+const badProfile = p => !p || typeof p !== 'object' || Array.isArray(p) || typeof p.id !== 'string';
 function loadDB() {
   let raw = null;
-  try { raw = localStorage.getItem(STORE_KEY); } catch (e) { raw = null; }
+  try { raw = localStorage.getItem(STORE_KEY); } catch (e) { saveBlocked = true; LOAD_FIXES = ['ほぞんした データを よみだせませんでした（うわがき しないよう ほぞんを とめています）']; }
   try { DB = JSON.parse(raw); } catch (e) { DB = null; }
-  const ok = DB && typeof DB === 'object' && Array.isArray(DB.profiles);
-  if (raw && !ok) {
-    BROKEN = raw;
-    try { localStorage.setItem(BROKEN_KEY, raw); } catch (e) { saveBlocked = true; }
-  } else { try { BROKEN = localStorage.getItem(BROKEN_KEY); } catch (e) { BROKEN = null; } }
+  const ok = DB && typeof DB === 'object' && !Array.isArray(DB) && Array.isArray(DB.profiles);
+  const fixes = [];
+  if (raw && !ok) fixes.push('ほぞんした データの かたちが こわれていました');
   if (!ok) DB = { profiles: [] };
+  const nBad = DB.profiles.filter(badProfile).length;
+  if (nBad) fixes.push(`ひとの データ ${nBad}こが こわれていて よみこめませんでした`);
   // ほぞん して あった データも おなじ きまりで しらべる（せっていは ひとごと。まえの ぜんたい せっていは はじめの あたい）
-  DB.profiles = DB.profiles.map(p => p && typeof p === 'object' ? cleanProfile(Object.assign({}, p, { settings: Object.assign({}, DB.settings || {}, p.settings) })) : null).filter(Boolean);
+  FIXES = fixes;
+  DB.profiles = DB.profiles.filter(p => !badProfile(p)).map(p => cleanProfile(Object.assign({}, p, { settings: Object.assign({}, DB.settings || {}, p.settings) }))).filter(Boolean);
+  FIXES = null;
+  // なにかを なおした・すてた ときは、もとの データを そのまま のこす
+  if (raw && fixes.length) keepBroken(raw);
+  LOAD_FIXES = LOAD_FIXES.concat(fixes);
   if (!DB.profiles.length) { const p = newProfile('ためしのひと'); p.settings = cleanSettings({}); DB.profiles = [p]; }
   if (!DB.profiles.some(p => p.id === DB.current)) DB.current = DB.profiles[0].id;
   DB.role = DB.role === 'student' ? 'student' : 'teacher';

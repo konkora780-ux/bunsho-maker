@@ -86,7 +86,13 @@ function SH() {
   const d = showDef(); Object.keys(d).forEach(k => { if (s.show[k] === undefined) s.show[k] = d[k]; });
   return s.show;
 }
-function shownTpls() { const l = SH().tpls; return isStudent() && Array.isArray(l) ? TPLS.filter(t => l.includes(t.id)) : TPLS; }
+// 0こに なった ときの さいていの 1つ（よみこみ・きどう・がめんで おなじ きまり）
+const SHOW_MIN = { tpl: 'gamba', mode: 'font' };
+function shownTpls() {
+  const l = SH().tpls; if (!isStudent() || !Array.isArray(l)) return TPLS;
+  const r = TPLS.filter(t => l.includes(t.id));
+  return r.length ? r : TPLS.filter(t => t.id === SHOW_MIN.tpl);
+}
 // かつどうの しゃしん：ぶんを つくる ときの てがかり（せんせいが いれる）
 const PHOTO_MAX = 6, PHOTO_PX = 480;
 function renderPhotos() {

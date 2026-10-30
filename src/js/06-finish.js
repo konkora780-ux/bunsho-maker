@@ -218,7 +218,8 @@ function finO() {
   return Object.assign({}, fin, { nameText: s.nameText, glyphs: s.glyphs ? Object.assign({}, P().glyphs, s.glyphs) : undefined });
 }
 function renderFinish() {
-  const modesOk = isStudent() && Array.isArray(SH().modes) && SH().modes.length ? SH().modes : MODE_IDS;
+  const ml = SH().modes, mf = Array.isArray(ml) ? MODE_IDS.filter(m => ml.includes(m)) : MODE_IDS;
+  const modesOk = !isStudent() ? MODE_IDS : mf.length ? mf : [SHOW_MIN.mode];
   if (!modesOk.includes(fin.mode)) fin.mode = modesOk[0];
   $$('.mode').forEach(b => { b.hidden = !modesOk.includes(b.dataset.m); b.classList.toggle('on', b.dataset.m === fin.mode); });
   $('#handTools').hidden = fin.mode !== 'hand';

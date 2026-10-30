@@ -413,10 +413,7 @@ label.btn{display:inline-flex;align-items:center;cursor:pointer}
           <select id="optCase"><option value="lower">こもじ（a b c）</option><option value="upper">おおもじ（A B C）</option></select></div>
       </div>
       <div class="card">
-        <div class="warnbox" id="brokenBox" hidden style="margin-bottom:10px">
-          <p>⚠ まえに ほぞんした データが こわれていて よみこめませんでした。けさずに とってあります。ファイルに とりだして、がっこうの ほぞん ばしょに のこしてください。</p>
-          <div class="row"><button class="btn small" id="btnBrokenSave">📥 こわれた データを ファイルに とりだす</button><button class="btn small warn" id="btnBrokenDrop">とりだしたので けす</button></div>
-        </div>
+        <div class="warnbox" id="brokenBox" hidden style="margin-bottom:10px"></div>
         <h2>バックアップ（ひっこし）</h2>
         <p class="hint">とうろくした もじ・ことば・ぶんしょう・さくひん・しゃしん・せっていを コードに して コピーできます。べつの iPad で「よみこむ」に はりつけると つかえます。<b>ふつうは いま えらんでいる 1にんぶん</b>です。</p>
         <label class="hint" style="display:flex;gap:8px;align-items:center;font-size:16px"><input type="checkbox" id="optExportAll" style="width:22px;height:22px"> ぜんいんぶんを 1つの コードに する（がっこうの ほぞん ばしょに のこす とき）</label>
@@ -437,7 +434,7 @@ label.btn{display:inline-flex;align-items:center;cursor:pointer}
   <div id="printArea"></div>
 </main>
 <!-- 更新日: アプリを直したら、ここの日付を書きかえる（最新版が反映されたかの目印。せんせいモードだけ表示） -->
-<div class="app-version tonly">更新日 2026-10-30</div>
+<div class="app-version tonly">更新日 2026-10-31</div>
 
 <script>
 // ===== 共通 =====
@@ -471,21 +468,41 @@ const S = () => P().settings || (P().settings = Object.assign({}, DEF_SET));
 function newProfile(name) {
   return { id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name, glyphs: {}, words: {}, doc: [], works: [] };
 }
-// よみこめない データは けさずに BROKEN_KEY へ うつす。うつせない ときは、うわがき しないよう ほぞんを とめる
-const BROKEN_KEY = STORE_KEY + '.broken';
-let BROKEN = null, saveBlocked = false;
+// こわれた データは けさずに「.broken.じこく」に のこす（なんかいぶんでも。まえの ものを うわがき しない）。
+// のこせない・よみだせない ときは、もとの データを うわがき しないよう ほぞんを とめる
+const BROKEN_PREFIX = STORE_KEY + '.broken';
+let saveBlocked = false, LOAD_FIXES = [];
+function brokenKeys() {
+  const ks = [];
+  try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith(BROKEN_PREFIX)) ks.push(k); } } catch (e) {}
+  return ks.sort();
+}
+function keepBroken(raw) {
+  try {
+    if (brokenKeys().some(k => localStorage.getItem(k) === raw)) return true;
+    let k = BROKEN_PREFIX + '.' + Date.now(); while (localStorage.getItem(k) !== null) k += '_';
+    localStorage.setItem(k, raw); return true;
+  } catch (e) { saveBlocked = true; return false; }
+}
+// ひとの データとして つかえない もの（null・かず・はいれつ・id が ない）
+const badProfile = p => !p || typeof p !== 'object' || Array.isArray(p) || typeof p.id !== 'string';
 function loadDB() {
   let raw = null;
-  try { raw = localStorage.getItem(STORE_KEY); } catch (e) { raw = null; }
+  try { raw = localStorage.getItem(STORE_KEY); } catch (e) { saveBlocked = true; LOAD_FIXES = ['ほぞんした データを よみだせませんでした（うわがき しないよう ほぞんを とめています）']; }
   try { DB = JSON.parse(raw); } catch (e) { DB = null; }
-  const ok = DB && typeof DB === 'object' && Array.isArray(DB.profiles);
-  if (raw && !ok) {
-    BROKEN = raw;
-    try { localStorage.setItem(BROKEN_KEY, raw); } catch (e) { saveBlocked = true; }
-  } else { try { BROKEN = localStorage.getItem(BROKEN_KEY); } catch (e) { BROKEN = null; } }
+  const ok = DB && typeof DB === 'object' && !Array.isArray(DB) && Array.isArray(DB.profiles);
+  const fixes = [];
+  if (raw && !ok) fixes.push('ほぞんした データの かたちが こわれていました');
   if (!ok) DB = { profiles: [] };
+  const nBad = DB.profiles.filter(badProfile).length;
+  if (nBad) fixes.push(`ひとの データ ${nBad}こが こわれていて よみこめませんでした`);
   // ほぞん して あった データも おなじ きまりで しらべる（せっていは ひとごと。まえの ぜんたい せっていは はじめの あたい）
-  DB.profiles = DB.profiles.map(p => p && typeof p === 'object' ? cleanProfile(Object.assign({}, p, { settings: Object.assign({}, DB.settings || {}, p.settings) })) : null).filter(Boolean);
+  FIXES = fixes;
+  DB.profiles = DB.profiles.filter(p => !badProfile(p)).map(p => cleanProfile(Object.assign({}, p, { settings: Object.assign({}, DB.settings || {}, p.settings) }))).filter(Boolean);
+  FIXES = null;
+  // なにかを なおした・すてた ときは、もとの データを そのまま のこす
+  if (raw && fixes.length) keepBroken(raw);
+  LOAD_FIXES = LOAD_FIXES.concat(fixes);
   if (!DB.profiles.length) { const p = newProfile('ためしのひと'); p.settings = cleanSettings({}); DB.profiles = [p]; }
   if (!DB.profiles.some(p => p.id === DB.current)) DB.current = DB.profiles[0].id;
   DB.role = DB.role === 'student' ? 'student' : 'teacher';
@@ -662,7 +679,13 @@ function SH() {
   const d = showDef(); Object.keys(d).forEach(k => { if (s.show[k] === undefined) s.show[k] = d[k]; });
   return s.show;
 }
-function shownTpls() { const l = SH().tpls; return isStudent() && Array.isArray(l) ? TPLS.filter(t => l.includes(t.id)) : TPLS; }
+// 0こに なった ときの さいていの 1つ（よみこみ・きどう・がめんで おなじ きまり）
+const SHOW_MIN = { tpl: 'gamba', mode: 'font' };
+function shownTpls() {
+  const l = SH().tpls; if (!isStudent() || !Array.isArray(l)) return TPLS;
+  const r = TPLS.filter(t => l.includes(t.id));
+  return r.length ? r : TPLS.filter(t => t.id === SHOW_MIN.tpl);
+}
 // かつどうの しゃしん：ぶんを つくる ときの てがかり（せんせいが いれる）
 const PHOTO_MAX = 6, PHOTO_PX = 480;
 function renderPhotos() {
@@ -1635,7 +1658,8 @@ function finO() {
   return Object.assign({}, fin, { nameText: s.nameText, glyphs: s.glyphs ? Object.assign({}, P().glyphs, s.glyphs) : undefined });
 }
 function renderFinish() {
-  const modesOk = isStudent() && Array.isArray(SH().modes) && SH().modes.length ? SH().modes : MODE_IDS;
+  const ml = SH().modes, mf = Array.isArray(ml) ? MODE_IDS.filter(m => ml.includes(m)) : MODE_IDS;
+  const modesOk = !isStudent() ? MODE_IDS : mf.length ? mf : [SHOW_MIN.mode];
   if (!modesOk.includes(fin.mode)) fin.mode = modesOk[0];
   $$('.mode').forEach(b => { b.hidden = !modesOk.includes(b.dataset.m); b.classList.toggle('on', b.dataset.m === fin.mode); });
   $('#handTools').hidden = fin.mode !== 'hand';
@@ -2143,7 +2167,7 @@ function renderSetting() {
   $('#optSpeakPick').checked = S().speakPick;
   $('#btnDownload').hidden = IN_FRAME;
   $('#btnUndoReplace').hidden = !DB.replacedBackup;
-  $('#brokenBox').hidden = !BROKEN;
+  renderBroken();
 }
 $('#optRomaji').addEventListener('change', e => { S().romaji = e.target.value; saveDB(); });
 $('#optCase').addEventListener('change', e => { S().keyCase = e.target.value; saveDB(); });
@@ -2178,8 +2202,13 @@ $('#btnDownload').addEventListener('click', () => {
 // ひと（プロフィール）の ほぞん こうもく。ふやしたら ここと cleanProfile に たす
 // id, name, glyphs, words, wordVerb, doc, docIds, docSrc, conn, cuts, cutsText, works, photos, hand, settings(+show), fin(+snap), mk, draft
 const SCHEMA_V = 2;
-const IMPORT_MAX = 8 * 1024 * 1024; // よみこむ コードの おおきさの うえかぎり（もじすう）
-const LIM = { strokes: 80, pts: 3000, glyphs: 200, hand: 5000, doc: 300, line: 1000, works: 300, text: 20000, words: 200 };
+// うえかぎりの きまり：アプリで つくれる りょう（ほぞん ばしょ いっぱいまで）より おおきく する。
+// かきだした コードは かならず よみこめる。けずった・すてた ものが あれば FIXES に かいて しらせる
+const IMPORT_MAX = 32 * 1024 * 1024; // よみこむ コードの うえかぎり（もじすう）。iPad の ほぞん ばしょ（やく 500まんもじ）より ずっと おおきい
+const FILE_MAX = 96 * 1024 * 1024;   // よみこむ ファイルの うえかぎり（バイト）
+const LIM = { strokes: 200, pts: 5000, glyphs: 300, hand: 50000, doc: 1000, line: 2000, works: 5000, text: 2001000, words: 500 };
+let FIXES = null; // cleanProfile で なおした ことの メモ（null の ときは メモ しない）
+const note = m => { if (FIXES && !FIXES.includes(m)) FIXES.push(m); };
 const obj = v => v && typeof v === 'object' && !Array.isArray(v) ? v : {};
 const arr = v => Array.isArray(v) ? v : [];
 const str = (v, max, d = '') => typeof v === 'string' ? v.slice(0, max) : d;
@@ -2249,6 +2278,9 @@ function cleanShow(v) {
   const o = obj(v), sh = showDef();
   const ids = (l, all) => l === null || l === undefined ? null : [...new Set(arr(l).filter(x => all.includes(x)))];
   sh.tpls = ids(o.tpls, tplIds()); sh.modes = ids(o.modes, MODE_IDS);
+  // 0こ では えらべなく なるので、さいていの 1つに する（せんせいの がめんの「さいごの 1つは はずせない」と おなじ きまり）
+  if (sh.tpls && !sh.tpls.length) { sh.tpls = [SHOW_MIN.tpl]; note('「みせるもの」の ぶんの かたが 0こ だったので「がんばったこと」だけに しました'); }
+  if (sh.modes && !sh.modes.length) { sh.modes = [SHOW_MIN.mode]; note('「みせるもの」の しあげかたが 0こ だったので「iPadの もじ」だけに しました'); }
   sh.glyph = bool(o.glyph, true); sh.practice = bool(o.practice, true); sh.stat = bool(o.stat, true); sh.max = pick(o.max, [0, 2, 3, 4, 6], 0);
   const wl = l => [...new Set(arr(l).filter(x => typeof x === 'string').map(x => x.slice(0, 60)))].slice(0, LIM.words);
   Object.keys(SLOTS).forEach(k => { if (obj(o.hide)[k]) sh.hide[k] = wl(o.hide[k]); if (obj(o.pin)[k]) sh.pin[k] = wl(o.pin[k]); });
@@ -2281,6 +2313,7 @@ function cleanProfile(src) {
   const p = newProfile(typeof src.name === 'string' && src.name.trim() ? src.name.trim().slice(0, 30) : 'よみこんだひと');
   if (typeof src.id === 'string' && /^[\w-]{1,40}$/.test(src.id)) p.id = src.id;
   const ws = cleanWorkState(src);
+  const name = p.name;
   Object.assign(p, ws, {
     glyphs: cleanGlyphs(src.glyphs), words, wordVerb,
     works: arr(src.works).slice(0, LIM.works).map(cleanWork).filter(Boolean),
@@ -2290,18 +2323,33 @@ function cleanProfile(src) {
   // ふるい かたち：てがきが はいれつ だった ころ
   if (src.fin && src.fin.grid === false && !src.fin.gstyle) p.fin.gstyle = 'none';
   if (src.draft && typeof src.draft === 'object') p.draft = Object.assign({ date: str(src.draft.date, 40) }, cleanWorkState(src.draft));
+  // なくなった もの・みじかく なった ものを しらせる
+  const len = v => Array.isArray(v) ? v.length : v && typeof v === 'object' ? Object.keys(v).length : 0;
+  const chars = v => Array.isArray(v) ? v.filter(x => typeof x === 'string').join('').length : 0;
+  const lost = (label, a, b) => { if (a > b) note(`${name}：${label} ${a - b}こを よみこめませんでした`); };
+  lost('さくひん', len(src.works), p.works.length);
+  lost('ぶん', len(src.doc), p.doc.length);
+  if (chars(src.doc) > p.doc.join('').length && len(src.doc) === p.doc.length) note(`${name}：ながすぎる ぶんを みじかく しました`);
+  lost('とうろくした もじ', len(src.glyphs), Object.keys(p.glyphs).length);
+  lost('てがきの もじ', len(src.hand), Object.keys(p.hand).length);
+  lost('しゃしん', len(src.photos), p.photos.length);
   return p;
 }
 // コードを しらべる：{ app, v, profile } か { app, v, profiles:[…] }（ぜんいんぶん）
 function parseCode(txt) {
-  if (txt.length > IMPORT_MAX) return { err: 'コードが おおきすぎます' };
+  if (txt.length > IMPORT_MAX) return { err: `コードが おおきすぎます（${Math.round(txt.length / 1e6)}まんもじ。うえかぎりは ${IMPORT_MAX / 1e6 | 0}まんもじ）` };
   let o; try { o = JSON.parse(txt); } catch (e) { return { err: 'コードが よみこめません' }; }
   if (!o || o.app !== 'bunsho-maker') return { err: '文章メーカーの コードでは ありません' };
   if (typeof o.v === 'number' && o.v > SCHEMA_V) return { err: 'あたらしい 文章メーカーで つくった コードです。アプリを さいしんに してください' };
   const list = o.profiles ? arr(o.profiles) : o.profile ? [o.profile] : [];
-  const ps = list.map(cleanProfile).filter(Boolean);
+  FIXES = [];
+  const isObj = x => x && typeof x === 'object' && !Array.isArray(x);
+  const nBad = list.filter(x => !isObj(x)).length;
+  if (nBad) note(`ひとの データ ${nBad}こが こわれていて よみこめませんでした`);
+  const ps = list.filter(isObj).map(cleanProfile).filter(Boolean);
+  const fixes = FIXES; FIXES = null;
   if (!ps.length) return { err: 'コードの なかみが こわれています' };
-  return { ps };
+  return { ps, fixes };
 }
 function importText(txt) {
   const r = parseCode(txt);
@@ -2318,6 +2366,7 @@ function importText(txt) {
       return toast('ほぞんする ばしょが たりず、よみこめませんでした（いまの データは そのままです）');
     }
     bindProfile(); toast(msg); renderWho(); renderSetting();
+    if (r.fixes.length) showFixes('よみこむ ときに なおした こと', r.fixes);
   };
   const addAll = asNew => () => ps.forEach(p => {
     if (asNew && DB.profiles.some(x => x.id === p.id)) { p.id = newProfile('').id; p.name += '（よみこみ）'; }
@@ -2353,19 +2402,40 @@ $('#btnUndoReplace').addEventListener('click', () => {
   if (!saveDB()) { DB.profiles = before; DB.current = cur; DB.replacedBackup = bk; saveDB(); return toast('ほぞん できず、もどせませんでした'); }
   bindProfile(); toast('まえの データに もどしました'); renderWho(); renderSetting();
 });
-// こわれた データの とりだし・けす
-$('#btnBrokenSave').addEventListener('click', () => {
-  const a = el('a', { href: URL.createObjectURL(new Blob([BROKEN || ''], { type: 'application/json' })), download: 'bunsho-broken-' + new Date().toISOString().slice(0, 10) + '.json' });
-  document.body.append(a); a.click(); a.remove();
-});
-$('#btnBrokenDrop').addEventListener('click', function () {
-  if (this.dataset.c !== '1') { this.dataset.c = '1'; this.textContent = 'ほんとうに けす？（とりだした ファイルは のこります）'; setTimeout(() => { this.dataset.c = ''; this.textContent = 'とりだしたので けす'; }, 3000); return; }
-  try { localStorage.removeItem(BROKEN_KEY); } catch (e) {}
-  BROKEN = null; saveBlocked = false;
-  if (saveDB()) toast('けしました'); renderSetting();
-});
+// こわれた データの とりだし・けす（のこして ある ぶんを ぜんぶ ならべる）
+function renderBroken() {
+  const box = $('#brokenBox'), ks = brokenKeys(); box.innerHTML = '';
+  box.hidden = !ks.length && !LOAD_FIXES.length && !saveBlocked;
+  if (box.hidden) return;
+  if (LOAD_FIXES.length) box.append(el('p', {}, '⚠ ひらいた ときに なおした こと：'), el('ul', {}, ...LOAD_FIXES.map(x => el('li', {}, x))));
+  if (saveBlocked) box.append(el('p', {}, '⚠ もとの データを まもる ために、ほぞんを とめています。したの ボタンで とりだしてから「けす」を おすと、ほぞん できるように なります。'));
+  if (!ks.length) return;
+  box.append(el('p', {}, `もとの データを けさずに ${ks.length}こ とってあります。ファイルに とりだして、がっこうの ほぞん ばしょに のこしてください。`));
+  ks.forEach(k => {
+    const t = +k.slice(BROKEN_PREFIX.length + 1).replace(/_+$/, ''), d = t ? new Date(t) : null;
+    const label = d ? `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}` : 'まえの もの';
+    const drop = el('button', { class: 'btn small warn' }, 'とりだしたので けす');
+    drop.addEventListener('click', () => {
+      if (drop.dataset.c !== '1') { drop.dataset.c = '1'; drop.textContent = 'ほんとうに けす？'; setTimeout(() => { drop.dataset.c = ''; drop.textContent = 'とりだしたので けす'; }, 3000); return; }
+      try { localStorage.removeItem(k); } catch (e) {}
+      if (!brokenKeys().length) { saveBlocked = false; LOAD_FIXES = []; }
+      if (saveDB()) toast('けしました'); renderSetting();
+    });
+    box.append(el('div', { class: 'row' }, el('span', {}, label),
+      el('button', { class: 'btn small', onclick: () => { let raw = ''; try { raw = localStorage.getItem(k) || ''; } catch (e) {} const a = el('a', { href: URL.createObjectURL(new Blob([raw], { type: 'application/json' })), download: 'bunsho-broken-' + (t || 'old') + '.json' }); document.body.append(a); a.click(); a.remove(); } }, '📥 ファイルに とりだす'), drop));
+  });
+}
 $('#btnImport').addEventListener('click', () => importText($('#exportBox').value.trim()));
-$('#fileImport').addEventListener('change', e => { const f = e.target.files[0]; if (!f) return; f.text().then(importText); e.target.value = ''; });
+$('#fileImport').addEventListener('change', e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  if (f.size > FILE_MAX) return toast('ファイルが おおきすぎます（文章メーカーの コードでは ないかも しれません）');
+  f.text().then(importText);
+});
+// なおした ことの おしらせ
+function showFixes(title, list) {
+  const m = openModal(el('div', { class: 'regtitle' }, '⚠ ' + title), el('ul', { class: 'hint', style: 'text-align:left;max-width:560px' }, ...list.map(x => el('li', {}, x))),
+    el('div', { class: 'row' }, el('button', { class: 'btn main', onclick: () => m.remove() }, 'わかった')));
+}
 
 // ===== はじめる =====
 loadDB();
@@ -2375,6 +2445,8 @@ renderWho();
 applyRole();
 show('make');
 if (saveBlocked) saveBanner(true);
+// ひらいた ときに なおした ことが あれば しらせる（くわしくは「せってい」）
+if (LOAD_FIXES.length) toast('⚠ ほぞんした データの いちぶを なおしました。「せってい」で たしかめてください');
 </script>
 </body>
 </html>
