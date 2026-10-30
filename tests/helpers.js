@@ -1,7 +1,15 @@
-// テストの どうぐ：あたらしい ブラウザの がめんで index.html を ひらく
-const { chromium } = require('playwright');
-const path = require('path'), fs = require('fs');
-const URL = 'file://' + path.join(__dirname, '..', 'index.html');
+// テストの どうぐ：ちいさな サーバー（http://localhost）で index.html を くばり、あたらしい ブラウザの がめんで ひらく
+// BROWSER=webkit で Safari と おなじ エンジン（WebKit）でも ためせる（npx playwright install webkit が ひつよう）
+const pw = require('playwright');
+const path = require('path'), fs = require('fs'), http = require('http');
+const ROOT = path.join(__dirname, '..');
+const server = http.createServer((req, res) => {
+  const p = path.join(ROOT, decodeURIComponent(req.url.split('?')[0]).replace(/^\/+$/, '/index.html'));
+  if (!p.startsWith(ROOT) || !fs.existsSync(p) || fs.statSync(p).isDirectory()) { res.writeHead(404); return res.end(); }
+  res.writeHead(200, { 'Content-Type': p.endsWith('.html') ? 'text/html; charset=utf-8' : 'application/octet-stream' });
+  fs.createReadStream(p).pipe(res);
+});
+let URL = '';
 const OUT = path.join(__dirname, 'out');
 fs.mkdirSync(OUT, { recursive: true });
 const tests = [];
@@ -20,13 +28,17 @@ async function openPage(browser, opt = {}) {
   return pg;
 }
 async function run() {
-  const browser = await chromium.launch();
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  URL = `http://127.0.0.1:${server.address().port}/index.html`;
+  const name = process.env.BROWSER || 'chromium';
+  console.log(`（${name} ・ ${URL}）`);
+  const browser = await pw[name].launch();
   let fail = 0;
   for (const t of tests) {
     try { await t.fn(browser); console.log('✓', t.name); }
     catch (e) { fail++; console.log('✗', t.name, '\n ', e.message); }
   }
-  await browser.close();
+  await browser.close(); server.close();
   return fail;
 }
-module.exports = { test, eq, ok, openPage, run, OUT, URL_: URL };
+module.exports = { test, eq, ok, openPage, run, OUT, get URL_() { return URL; } };

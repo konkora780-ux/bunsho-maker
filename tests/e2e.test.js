@@ -1,7 +1,7 @@
 // iPad の 6つの がめんの おおきさで、①〜③・もじとうろく・せってい・じどうせいと モードを とおしで ためす
 // はみでた ボタンや エラーが あれば しっぱい。がめんの しゃしんは tests/out/ に できる
 const path = require('path');
-const { test, URL_, OUT } = require('./helpers');
+const H = require('./helpers'), { test, OUT } = H;
 const VPS = [[768, 1024, 'mini-tate'], [1024, 768, 'mini-yoko'], [810, 1080, '10.2-tate'], [1080, 810, '10.2-yoko'], [1024, 1366, 'pro-tate'], [1366, 1024, 'pro-yoko']];
 test('とおしで うごかす（iPad 6がめん）', async b => {
   const issues = [];
@@ -26,7 +26,7 @@ test('とおしで うごかす（iPad 6がめん）', async b => {
       });
       r.forEach(x => issues.push(`[${name}] ${label}: ${x}`));
     };
-    await pg.goto(URL_);
+    await pg.goto(H.URL_);
     await ovf('make');
     // ① 文づくり（タップ）
     await pg.locator('.tpl', { hasText: 'たのしかったこと' }).tap();

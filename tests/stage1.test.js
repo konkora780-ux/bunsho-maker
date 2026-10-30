@@ -307,3 +307,18 @@ test('2-C べつの ゆび・とめられた せん・ダイアログの フォ�
   eq(await pg.evaluate(() => document.querySelectorAll('.modal').length), 0, 'やめた ときは なにも ださない');
   noErr(pg);
 });
+
+test('2-D まとめPDF：1ページずつ つくり、おおい ときは わける', async b => {
+  const pg = await openPage(b);
+  const r = await pg.evaluate(async () => {
+    P().works = Array.from({ length: 35 }, (_, i) => ({ id: 'w' + i, date: '2026-10-30', text: 'あいう' + i, mode: 'font', dir: 'yoko', cols: 10, rows: 0, font: 0, paper: 'a4t', gstyle: 'masu', size: 0.72 }));
+    saveDB(); show('finish'); P().works.forEach(w => selWorks.add(w.id)); updWorksBtn();
+    $('#btnWorksPDF').click();
+    for (let i = 0; i < 200 && !document.querySelector('.modal'); i++) await new Promise(r => setTimeout(r, 100));
+    const btns = [...document.querySelectorAll('.modal button')].map(b => b.textContent);
+    return { pdfBtns: btns.filter(t => t.startsWith('📤 PDF')), text: document.querySelector('.modal .hint').textContent };
+  });
+  eq(r.pdfBtns, ['📤 PDF 1/2 を おくる', '📤 PDF 2/2 を おくる']);
+  ok(r.text.includes('35ページ'), r.text);
+  noErr(pg);
+});

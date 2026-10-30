@@ -173,10 +173,14 @@ function renderSheet(cv, o, text, opt = {}) {
   return { geom: g, missing, xf: { ox, oy, s, pw, ph } };
 }
 // ぜんぶの ページを がぞうに する
-async function renderPages(o, text, hand, scale) {
+// onPage が あれば 1ページずつ わたして（うけとった がわで すぐ かいほう）、メモリを ためない
+async function renderPages(o, text, hand, scale, onPage) {
   if (o.mode === 'font') await ensureFont((FONTS[o.font] || FONTS[0])[1]); else await ensureFont('"Klee One"');
   const n = sheetGeom(o, text).pages, out = [];
-  for (let p = 0; p < n; p++) { const cv = document.createElement('canvas'); renderSheet(cv, o, text, { hand, exporting: true, page: p, scale }); out.push(cv); }
+  for (let p = 0; p < n; p++) {
+    const cv = document.createElement('canvas'); renderSheet(cv, o, text, { hand, exporting: true, page: p, scale });
+    if (onPage) { await onPage(cv); cv.width = cv.height = 0; } else out.push(cv);
+  }
   return out;
 }
 async function ensureFont(fam) { try { await document.fonts.load(`40px ${fam}`, 'あ'); } catch (e) {} }
