@@ -551,6 +551,10 @@ const SLOTS = {
   // 「がんばったこと」「つぎに」の ぶんまつ：えらんだ「なにを」に あわせて かわる（renderChooser で つくる）
   gend: { q: 'どうした？', w: [] },
   tend: { q: 'どうしたい？', w: [] },
+  // だれに つたえる？（よびかけ）
+  aite: { q: 'だれに つたえる？', w: [['せんせい', '🧑‍🏫'], ['おうちのひと', '🏠'], ['おかあさん', '👩'], ['おとうさん', '👨'], ['ともだち', '🧒'], ['くらすのみんな', '👫'], ['みなさん', '📣']] },
+  // おねがいの ことば（「いっしょに〜」は えらんだ「なにを」で かわる）
+  help: { q: 'どうしてほしい？', w: [['てつだってください。', '🙋'], ['おしえてください。', '💡'], ['みてください。', '👀']] },
   feel2: { q: 'どうおもった？', w: [['たのしい', '😆'], ['うれしい', '😊'], ['もっとがんばりたい', '🔥'], ['すごい', '😲'], ['むずかしい', '😣'], ['こまった', '😥'], ['てつだってほしい', '🙋']] },
 };
 // うごきの かたち（した・して・できる）
@@ -592,6 +596,8 @@ const TPLS = [
   { id: 'tano', em: '😊', name: 'たのしかったこと', parts: ['@itsu', '、', '@dare', 'と', '@nani', '#past', '。', '@feel'] },
   { id: 'deki', em: '⭐', name: 'できるようになったこと', parts: ['@nani', '#potp', '@how2', '#potv', 'ようになりました。'] },
   { id: 'omoi', em: '💭', name: 'おもったこと', parts: ['@nani', '#te', '、', '@feel2', 'とおもいました。'] },
+  { id: 'hokoku', em: '📢', name: 'ほうこくする', parts: ['@aite', '、', '@itsu', '、', '@nani', 'を', '@how', '@gend'] },
+  { id: 'onegai', em: '🙏', name: 'おねがい', parts: ['@aite', '、', '@nani', 'を', '@help'] },
   { id: 'tsugi', em: '🚀', name: 'つぎに がんばりたいこと', parts: ['つぎは、', '@nani', 'を', '@how', '@tend'] },
   { id: 'jiyu', em: '✍️', name: 'じゆうに かく', parts: [] },
 ];
@@ -653,7 +659,7 @@ function renderChooser(key, idx) {
     mk.vals[idx] = w;
     const t = TPLS.find(t => t.id === mk.tpl);
     // 「なにを」を かえたら、それに あわせた ぶんまつを えらびなおす
-    if (key === 'nani') t.parts.forEach((p, i) => { if (p === '@gend' || p === '@tend') delete mk.vals[i]; });
+    if (key === 'nani') t.parts.forEach((p, i) => { if (p === '@gend' || p === '@tend' || p === '@help') delete mk.vals[i]; });
     const next = t.parts.findIndex((p, i) => p[0] === '@' && !mk.vals[i]);
     mk.active = next >= 0 ? next : null;
     renderFrame();
@@ -672,6 +678,11 @@ function renderChooser(key, idx) {
       ch.append(el('div', { class: 'hint' }, 'さきに「なにを？」を えらぶと、あう ことばが でます。'));
       words = key === 'gend' ? [['がんばりました。', '💪']] : [['がんばりたいです。', '💪']];
     }
+  }
+  if (key === 'help') {
+    const t = TPLS.find(t => t.id === mk.tpl), nw = mk.vals[t.parts.indexOf('@nani')];
+    const V = nw ? VERBS[wordInfo(nw).v] || VERBS.suru : VERBS.suru;
+    words = words.concat([['いっしょに' + V.te + 'ください。', '🤝']]);
   }
   let mineW = (P().words[key] || []);
   if (isStudent()) {
