@@ -1,0 +1,424 @@
+<title>文章メーカー</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&family=Klee+One:wght@600&display=swap">
+<style>
+/* レイアウト: 上にステップタブ、下に大きな操作エリア。教室の黒板とノートをイメージした単一テーマ */
+:root{
+  --bg:#e9f1ef; --card:#ffffff; --ink:#1b2b2e; --sub:#5d7175; --line:#c5d6d4;
+  --accent:#1f6f62; --accent-soft:#d6ebe6; --hl:#ffd23f; --ok:#2e9d5b; --ng:#d6534d;
+  --f-ui:"Zen Maru Gothic","Hiragino Maru Gothic ProN","Hiragino Sans",sans-serif;
+  --f-model:"Klee One","Hiragino Mincho ProN",serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+/* じどうせいと モードでは せんせい用の ボタンを かくす */
+body.student .tonly{display:none!important}
+body:not(.student) .sonly{display:none!important}
+.rolebtn{position:relative;overflow:hidden;min-height:46px;padding:6px 14px;border-radius:24px;border:2px solid var(--accent);background:var(--card);font-weight:700;font-size:16px}
+.rolebtn .fill{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--hl);z-index:0}
+.rolebtn.press .fill{width:100%;transition:width 1.2s linear}
+.rolebtn .lb{position:relative;z-index:1}
+.tcard{border-style:dashed}
+.tcard>h2::before{content:"🧑‍🏫 ";}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:18px;
+  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+input,textarea,select{font-family:inherit;font-size:18px;-webkit-user-select:text;user-select:text}
+button{font-family:inherit;font-size:18px;color:var(--ink);cursor:pointer;touch-action:manipulation}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--hl);outline-offset:2px}
+header.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding-block:12px 8px}
+header.top h1{margin:0;font-size:26px;letter-spacing:.06em;color:var(--accent)}
+header.top .who{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:16px;color:var(--sub)}
+header.top select{padding:6px 10px;border-radius:10px;border:2px solid var(--line);background:var(--card);color:var(--ink)}
+nav.steps{display:flex;flex-wrap:wrap;gap:8px;padding-bottom:12px}
+nav.steps button{flex:1 1 120px;white-space:nowrap;min-height:56px;border:2px solid var(--line);background:var(--card);border-radius:14px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px}
+nav.steps button .no{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--accent-soft);color:var(--accent)}
+nav.steps button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+nav.steps button.on .no{background:#fff;color:var(--accent)}
+nav.steps .sep{flex:0 0 8px}
+nav.steps button.tool{flex:0 1 auto;padding:0 14px;font-size:16px}
+main{padding-bottom:40px}
+section.view{display:flex;flex-direction:column;gap:16px}
+.card{background:var(--card);border:2px solid var(--line);border-radius:16px;padding:16px}
+.card h2{margin:0 0 10px;font-size:20px;color:var(--accent)}
+.hint{color:var(--sub);font-size:15px;margin:4px 0}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.btn{min-height:52px;padding:8px 18px;border-radius:14px;border:2px solid var(--line);background:var(--card);font-weight:700}
+.btn.main{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.warn{color:var(--ng);border-color:#ebc3c1}
+.btn.small{min-height:40px;padding:4px 12px;font-size:16px}
+.btn.on{background:var(--accent-soft);border-color:var(--accent)}
+.btn:disabled{opacity:.4}
+/* ① ぶんをつくる */
+.tpl-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+.tpl{min-height:72px;border:2px solid var(--line);border-radius:14px;background:var(--card);padding:8px 12px;text-align:left;display:flex;gap:10px;align-items:center;font-weight:700}
+.tpl .em{font-size:30px}
+.tpl.on{border-color:var(--accent);background:var(--accent-soft)}
+.frame{font-size:28px;line-height:2.2;font-family:var(--f-model);display:flex;flex-wrap:wrap;align-items:center;gap:4px 2px}
+.slot{font-family:var(--f-ui);font-size:24px;min-height:56px;min-width:96px;padding:4px 14px;border-radius:12px;border:3px dashed var(--accent);background:#fff;color:var(--accent);font-weight:700}
+.slot.filled{border-style:solid;background:var(--accent-soft);color:var(--ink)}
+.slot.active{box-shadow:0 0 0 4px var(--hl)}
+.vpart{color:var(--accent);border-bottom:3px dotted var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:10px}
+.chip{min-height:60px;padding:6px 16px;border-radius:30px;border:2px solid var(--line);background:#fff;font-size:22px;font-weight:700;display:flex;align-items:center;gap:8px}
+.chip .em{font-size:26px}
+.chip.mine{border-style:dashed}
+.preview{font-family:var(--f-model);font-size:30px;line-height:1.8;min-height:60px;padding:8px 12px;background:#fafdfc;border:2px solid var(--line);border-radius:12px;word-break:break-all}
+.doclist{display:flex;flex-direction:column;gap:8px}
+.docline{display:flex;gap:10px;align-items:center;font-family:var(--f-model);font-size:24px;padding:6px 10px;border-radius:10px;background:#f4f8f7}
+.docline>span:first-child{flex:1;min-width:0;word-break:break-all}
+.docline .mv{display:flex;gap:4px}
+.docline .mv button:disabled{opacity:.3}
+textarea.edit{width:100%;min-height:110px;padding:10px;border-radius:12px;border:2px solid var(--line);font-family:var(--f-model);font-size:24px}
+.warnbox{color:var(--ng);font-size:16px}
+/* ② タイピング */
+.target{font-size:34px;line-height:2.4;font-family:var(--f-model);word-break:break-all;display:flex;flex-wrap:wrap}
+.unit{display:inline-flex;flex-direction:column;align-items:center;padding:0 2px;border-radius:8px;line-height:1.3;margin:2px 0}
+.unit .k{font-size:34px}
+.unit .r{font-family:var(--f-ui);font-size:15px;color:var(--sub);letter-spacing:.04em;min-height:18px}
+.unit.done .k{color:var(--ok)}
+.unit.done .r{color:var(--ok)}
+.unit.now{background:#fff3c2}
+.unit.now .k{color:var(--ink)}
+.unit .r b{color:var(--ok)}
+.unit.skip .k{color:#aab}
+.bignow{display:flex;align-items:center;justify-content:center;gap:28px;min-height:140px}
+.bignow .bk{font-family:var(--f-model);font-size:96px;line-height:1}
+.bignow .br{font-size:52px;letter-spacing:.12em;font-weight:700}
+.bignow .br .t{color:var(--ok)}
+.bignow .br .n{background:var(--hl);border-radius:8px;padding:0 4px}
+.stat{font-size:16px;color:var(--sub)}
+.kb{background:#d3d8de;border-radius:14px;padding:10px 8px;display:flex;flex-direction:column;gap:8px;max-width:1000px;margin:0 auto;width:100%}
+.kb .kr{display:flex;gap:6px;justify-content:center}
+.key{flex:1 1 0;min-width:0;height:62px;border:none;border-radius:9px;background:#fff;box-shadow:0 2px 0 #8a9198;font-size:26px;display:grid;place-items:center;padding:0;position:relative}
+.key.fn{background:#aeb4bc;font-size:17px}
+.key.space{flex:5 1 0;font-size:17px}
+.key.wide{flex:1.5 1 0}
+.key.next{background:var(--hl);box-shadow:0 0 0 4px #e0a800,0 2px 0 #8a9198;animation:pulse 1s ease-in-out infinite}
+.kkb{display:flex;gap:6px;justify-content:center}
+.kcol{display:flex;flex-direction:column;gap:6px;flex:1 1 0;min-width:0;max-width:84px}
+.kcol .key{flex:none;height:58px;width:100%;font-size:26px;font-family:var(--f-model)}
+.kcol .key.fn{font-size:17px;font-family:var(--f-ui)}
+.key.ghost{visibility:hidden;height:58px}
+.key.miss{background:#ffd3d0}
+.key.hit{transform:translateY(2px);box-shadow:none}
+@keyframes pulse{50%{transform:scale(1.06)}}
+@media (prefers-reduced-motion:reduce){.key.next{animation:none}}
+.f0{border-bottom:6px solid #e9a3c4!important}.f1{border-bottom:6px solid #f2c26b!important}.f2{border-bottom:6px solid #9fd38a!important}.f3{border-bottom:6px solid #8cc4ef!important}
+.f4{border-bottom:6px solid #8cc4ef!important}.f5{border-bottom:6px solid #9fd38a!important}.f6{border-bottom:6px solid #f2c26b!important}.f7{border-bottom:6px solid #e9a3c4!important}
+.done-box{text-align:center;font-size:30px;font-weight:700;color:var(--ok)}
+.shake{animation:shake .25s}
+@keyframes shake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+/* ③ しあげる */
+.modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.mode{min-height:84px;border:3px solid var(--line);border-radius:16px;background:#fff;font-weight:700;font-size:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.mode small{font-size:14px;color:var(--sub);font-weight:500}
+.mode.on{border-color:var(--accent);background:var(--accent-soft)}
+.opts{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;font-size:16px}
+.opts label{display:flex;align-items:center;gap:6px}
+.opts select,.opts input[type=text]{padding:6px 8px;border-radius:10px;border:2px solid var(--line);background:#fff;font-size:16px}
+.sheetwrap{background:#c9d3d1;border-radius:14px;padding:12px;overflow:auto;max-height:78vh}
+canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.15);touch-action:none;max-width:100%}
+.handpad{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;margin-top:12px}
+.padside{flex:1 1 260px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.missing{font-size:16px;color:var(--ng)}
+.works{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.work{border:2px solid var(--line);border-radius:12px;padding:8px;background:#fff;display:flex;flex-direction:column;gap:6px}
+.work canvas{width:100%;height:auto;border:1px solid var(--line)}
+.work .meta{font-size:13px;color:var(--sub)}
+/* もじとうろく */
+.glyphs{display:flex;flex-direction:column;gap:6px}
+.grow{display:flex;flex-wrap:wrap;gap:6px}
+.gcell{width:64px;height:76px;border:2px solid var(--line);border-radius:10px;background:#fff;padding:2px;display:flex;flex-direction:column;align-items:center;justify-content:space-between}
+.gcell canvas{width:44px;height:44px}
+.gcell .lb{font-size:15px;color:var(--sub);font-family:var(--f-model)}
+.gcell.need{border-color:var(--hl);box-shadow:0 0 0 3px var(--hl)}
+.gcell.has{border-color:var(--accent);background:#f2faf8}
+.prog{font-size:16px;color:var(--sub)}
+/* モーダル */
+.modal{position:fixed;inset:0;background:rgba(20,35,38,.55);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+.modal .box{background:#fff;border-radius:18px;padding:16px;max-width:96vw;max-height:94vh;overflow:auto;display:flex;flex-direction:column;gap:12px;align-items:center}
+.regcv{width:min(420px,80vw,60vh);height:min(420px,80vw,60vh);border:3px solid var(--accent);border-radius:12px;touch-action:none;background:#fff}
+/* かき支援と おなじく、がめん いっぱいの おおきな わくで かく */
+.fullpad{position:fixed;inset:0;z-index:45;background:var(--bg);display:flex;flex-direction:column;align-items:center;gap:10px;
+  padding:calc(10px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.padbar{width:100%;display:flex;flex-direction:column;gap:8px;background:var(--card);border-radius:14px;padding:8px 12px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.padbar .regtitle .ch{font-size:44px}
+.bigcv{border:3px solid var(--accent);border-radius:14px;touch-action:none;background:#fff;flex:none}
+.hctx{font-family:var(--f-model);font-size:24px;letter-spacing:.08em;word-break:break-all}
+.hctx .cur{background:var(--hl);border-radius:6px;padding:0 2px}
+.hctx .dn{color:var(--ok)}
+.modal .box.fullbox{width:100vw;height:100%;max-width:none;max-height:none;border-radius:0;justify-content:flex-start;
+  padding:calc(10px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.modal:has(.fullbox){padding:0}
+.regtitle{font-size:22px;font-weight:700;display:flex;align-items:center;gap:12px}
+.regtitle .ch{font-family:var(--f-model);font-size:56px;color:var(--accent)}
+.imgout{max-width:90vw;max-height:52vh;border:1px solid var(--line);-webkit-user-select:auto;user-select:auto;-webkit-touch-callout:default}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 22px;border-radius:30px;font-size:18px;z-index:60}
+.settings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.field{display:flex;flex-direction:column;gap:6px;font-size:16px}
+.field select,.field input{padding:8px;border-radius:10px;border:2px solid var(--line);background:#fff}
+@media print{
+  body{background:#fff;padding:0}
+  header.top,nav.steps,main>*:not(#printArea),.app-version{display:none!important}
+  #printArea{display:block!important}
+  #printArea img{width:100%;height:auto}
+}
+#printArea{display:none}
+.saveerr{position:fixed;left:0;right:0;top:0;z-index:70;background:var(--ng);color:#fff;font-weight:700;font-size:16px;padding:calc(10px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px))}
+.cutbox{display:flex;flex-wrap:wrap;gap:4px;max-width:720px}
+.cutch{min-width:44px;min-height:52px;font-size:26px;font-family:var(--f-model);border:2px solid var(--line);border-radius:8px;background:#fff}
+.cutch.cut{border-right:6px solid var(--ng)}
+.showgrp{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin:6px 0 10px;font-size:16px}
+.showgrp b{min-width:9em}
+.wtog{min-height:40px;padding:4px 12px;border-radius:20px;border:2px solid var(--accent);background:var(--accent-soft);font-size:16px}
+.wtog.off{border-color:var(--line);background:#fff;color:#9aa;text-decoration:line-through}
+label.btn{display:inline-flex;align-items:center;cursor:pointer}
+.photos{display:flex;gap:10px;flex-wrap:wrap}
+.photo{position:relative}
+.photo img{display:block;height:120px;max-width:200px;object-fit:cover;border-radius:10px;border:2px solid var(--line);cursor:zoom-in}
+.photo .x{position:absolute;top:-8px;right:-8px;min-height:36px;min-width:36px;padding:0;border-radius:18px}
+.bigphoto{display:block;max-width:100%;max-height:70vh;margin:0 auto;border-radius:12px}
+.app-version{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(8px + env(safe-area-inset-bottom,0px));font-size:.7rem;color:var(--ink);opacity:.35;pointer-events:none;z-index:5}
+@media (max-width:860px){nav.steps button{font-size:16px;gap:4px;padding:0 6px}nav.steps button .no{width:24px;height:24px}nav.steps button.tool{padding:0 10px}}
+@media (max-width:600px){.key{height:48px;font-size:20px}.bignow .bk{font-size:64px}.bignow .br{font-size:36px}.target .unit .k{font-size:26px}}
+</style>
+
+<header class="top">
+  <h1>文章メーカー</h1>
+  <div class="who"><span class="tonly">つかうひと</span> <select id="whoSel" class="tonly" aria-label="つかうひと"></select><b class="sonly" id="whoName"></b>
+    <button class="rolebtn" id="roleBtn" aria-label="ながおしで せんせい／じどうせいと を きりかえ"><span class="fill"></span><span class="lb" id="roleLb"></span></button></div>
+</header>
+<nav class="steps" id="steps">
+  <button data-v="make"><span class="no">1</span>ぶんをつくる</button>
+  <button data-v="type"><span class="no">2</span>うってみる</button>
+  <button data-v="finish"><span class="no">3</span>しあげる</button>
+  <span class="sep"></span>
+  <button data-v="glyph" class="tool">✏️ もじとうろく</button>
+  <button data-v="setting" class="tool tonly">⚙ せってい</button>
+</nav>
+<main>
+  <!-- ① ぶんをつくる -->
+  <section class="view" id="v-make">
+    <div class="card" id="photoCard">
+      <h2>📷 かつどうの しゃしん</h2>
+      <div class="photos" id="photoList"></div>
+      <div class="row tonly" style="margin-top:8px">
+        <label class="btn small" id="btnPhotoAdd">＋ しゃしんを いれる<input type="file" id="photoFile" accept="image/*" multiple hidden></label>
+        <span class="hint">（ひとり 6まいまで。ちいさく して この iPad に ほぞんします）</span>
+      </div>
+    </div>
+    <div class="card">
+      <h2>なにを かく？</h2>
+      <div class="tpl-list" id="tplList"></div>
+    </div>
+    <div class="card" id="frameCard">
+      <h2>ことばを えらぼう</h2>
+      <div class="frame" id="frame"></div>
+      <div id="chooser" style="margin-top:12px"></div>
+    </div>
+    <div class="card">
+      <h2>できた ぶん</h2>
+      <div class="preview" id="sentPreview"></div>
+      <p class="hint" id="rereadHint" hidden style="font-size:17px">🔊 きいて たしかめよう。なおしたい ところは、うえの ことばを タップすると えらびなおせます。</p>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="btnSpeak">🔊 よみあげる</button>
+        <button class="btn main" id="btnAddSent">＋ このぶんを いれる</button>
+        <button class="btn small" id="btnClearSlots">やりなおす</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>ぶんしょう（ぜんぶ）</h2>
+      <label class="hint" style="display:flex;gap:8px;align-items:center;font-size:17px;margin-bottom:8px"><input type="checkbox" id="optConn" style="width:24px;height:24px"> 「はじめに、つぎに、さいごに、」を つける（2ぶん いじょう）</label>
+      <div class="doclist" id="docList"></div>
+      <details class="tonly" style="margin-top:10px">
+        <summary class="hint">せんせい：ちょくせつ なおす</summary>
+        <textarea class="edit" id="docEdit" aria-label="ぶんしょうを なおす"></textarea>
+        <div class="row"><button class="btn small" id="btnApplyEdit">なおしを はんえい</button><span class="hint">カタカナは ひらがなに かわります</span></div>
+      </details>
+      <div class="warnbox" id="docWarn"></div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn main" id="goType">つぎへ：うってみる ▶</button>
+        <button class="btn" id="btnSpeakAll">🔊 ぜんぶ よむ</button>
+        <button class="btn small warn tonly" id="btnClearDoc">ぜんぶ けす</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ② うってみる -->
+  <section class="view" id="v-type" hidden>
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">うつ ぶん</h2>
+        <div class="row">
+          <span class="stat" id="typeStat"></span>
+          <button class="btn small" id="btnTypeRestart">はじめから</button>
+          <button class="btn small" id="btnSpeakNow">🔊</button>
+        </div>
+      </div>
+      <div class="target" id="target"></div>
+    </div>
+    <div class="card" id="nowCard">
+      <div class="bignow" id="bigNow"></div>
+    </div>
+    <div class="kb" id="kb"></div>
+    <div class="card tcard tonly">
+      <h2>うちかたの せってい</h2>
+      <div class="opts">
+      <label class="hint">うちかた <select id="optInput"><option value="kana">ひらがな（iPadの はいれつ）</option><option value="roma">ローマじ</option></select></label>
+      <label class="hint" id="lblFinger"><input type="checkbox" id="optFinger"> ゆびの いろ</label>
+      <label class="hint">ガイド
+        <select id="optGuide"><option value="2">ヒント＋キーを ひからせる</option><option value="1">ヒントだけ</option><option value="0">なし</option></select></label>
+      <label class="hint">くぎり <select id="optChunk"><option value="auto">1ぶん（ながい ときは「、」まで）</option><option value="ten">いつも「、」「。」まで</option><option value="sent">1ぶんずつ</option><option value="all">ぜんぶ いっきに</option></select></label>
+      <button class="btn small" id="btnCuts">✂ くぎりを なおす</button>
+      <label class="hint">つぎへの すすみかた <select id="optAdvance"><option value="auto09">すぐ じどうで（0.9びょう）</option><option value="auto2">ゆっくり じどうで（2びょう）</option><option value="manual">じぶんで「つぎへ」を おす</option></select></label>
+      <label class="hint"><input type="checkbox" id="optBig"> 1もじを おおきく だす</label>
+      <label class="hint"><input type="checkbox" id="optSound"> おと</label>
+      </div>
+    </div>
+  </section>
+
+  <!-- ③ しあげる -->
+  <section class="view" id="v-finish" hidden>
+    <div class="card">
+      <h2>どの もじで しあげる？</h2>
+      <div class="modes">
+        <button class="mode" data-m="glyph">✏️ じぶんの もじ<small>とうろくした もじで</small></button>
+        <button class="mode" data-m="font">🔤 iPadの もじ<small>フォントを えらぶ</small></button>
+        <button class="mode" data-m="hand">🖊 てがき<small>ゆび・ペンで かく</small></button>
+      </div>
+    </div>
+    <div class="card tcard tonly">
+      <h2>しあげかた（ようし・もじすう・かいぎょう）</h2>
+      <div class="opts" id="finOpts">
+        <label>つかいみち <select id="optUse"></select></label>
+        <label>ようし <select id="optPaper"></select></label>
+        <label>むき <select id="optDir"><option value="yoko">よこがき</option><option value="tate">たてがき</option></select></label>
+        <label>1ぎょうの もじ <select id="optCols"></select></label>
+        <label>ぎょうすう <select id="optRows"></select></label>
+        <label>わく <select id="optGstyle"></select></label>
+        <label>もじの おおきさ <select id="optSize"><option value="0.6">ちいさめ</option><option value="0.72">ふつう</option><option value="0.85">おおきめ</option></select></label>
+        <label id="lblFont">フォント <select id="optFont"></select></label>
+        <label id="lblWeight">せんの ふとさ <select id="optWeight"><option value="0.05">ほそい</option><option value="0.075" selected>ふつう</option><option value="0.1">ふとい</option></select></label>
+      </div>
+      <div class="opts" style="margin-top:8px">
+        <label>だい <input type="text" id="optTitle" placeholder="（なくても よい）" style="width:12em"></label>
+        <label><input type="checkbox" id="optName"> なまえを いれる</label>
+        <label><input type="checkbox" id="optSentBreak" checked> ぶんごとに かいぎょう</label>
+        <button class="btn small" id="btnBrMode">↵ かいぎょうを なおす</button>
+        <button class="btn small" id="btnBrReset">かいぎょうを もとに もどす</button>
+      </div>
+      <p class="hint" id="brHint" hidden>シートの もじを タップすると、その もじの まえで かいぎょうします（あかい せん）。もういちど タップすると もとに もどります。おわったら「↵ かいぎょうを なおす」を もういちど おします。</p>
+    </div>
+    <div class="card">
+      <div id="handTools" style="margin-top:12px">
+        <div class="row"><button class="btn main" id="btnHandOpen">✏️ おおきな わくで かく</button><span class="hint" id="handPos2"></span></div>
+        <p class="hint">したの シートの ますを タップすると、その もじから かけます。</p>
+        <div class="fullpad" id="handFull" hidden>
+          <div class="padbar">
+            <div class="regtitle"><span class="ch" id="handCh"></span><span class="hint" id="handPos"></span></div>
+            <div class="row">
+              <button class="btn" id="btnHandPrev">◀ まえ</button>
+              <button class="btn main" id="btnHandNext">かけた！ つぎへ ▶</button>
+              <button class="btn" id="btnHandUndo">↶ もどす</button>
+              <button class="btn" id="btnHandErase">この もじを けす</button>
+              <button class="btn" id="btnHandSpeak">🔊</button>
+              <label class="hint tonly"><input type="checkbox" id="optModel" checked> おてほん</label>
+              <label class="hint tonly"><input type="checkbox" id="optPenOnly"> ペンだけ</label>
+              <button class="btn" id="btnHandClose">✓ おわる</button>
+              <button class="btn small warn tonly" id="btnHandClear">ぜんぶ けす</button>
+            </div>
+            <div class="hctx" id="handCtx"></div>
+          </div>
+          <canvas id="handPad" class="bigcv" aria-label="もじを かく わく"></canvas>
+        </div>
+      </div>
+      <div class="missing" id="missingInfo"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn main" id="btnSaveWork">💾 ほぞんする</button>
+        <button class="btn tonly" id="btnImage">📤 パソコンへ おくる（PDF・がぞう）</button>
+        <button class="btn tonly" id="btnPrint" hidden>🖨 いんさつ</button>
+      </div>
+    </div>
+    <div class="row" id="pgNav" hidden style="justify-content:center"><button class="btn small" id="btnPgPrev">◀ まえの ページ</button><span id="pgLabel"></span><button class="btn small" id="btnPgNext">つぎの ページ ▶</button></div>
+    <div class="sheetwrap"><canvas class="sheet" id="sheet"></canvas></div>
+    <div class="card">
+      <h2>ほぞんした ぶんしょう</h2>
+      <div class="row" id="draftRow" hidden style="margin-bottom:10px;background:#fff7d6;border-radius:10px;padding:8px 10px">
+        <span class="hint" id="draftInfo"></span>
+        <button class="btn small" id="btnDraft">↩ したがきに もどす</button>
+      </div>
+      <div class="row tonly" style="margin-bottom:10px">
+        <button class="btn small" id="btnWorksAll">ぜんぶ えらぶ／はずす</button>
+        <button class="btn small main" id="btnWorksPDF" disabled>📤 えらんだ 0こを PDF に まとめて おくる</button>
+      </div>
+      <div class="works" id="works"></div>
+    </div>
+  </section>
+
+  <!-- もじとうろく -->
+  <section class="view" id="v-glyph" hidden>
+    <div class="card">
+      <h2>じぶんの もじを とうろくしよう</h2>
+      <p class="hint">もじを タップして、わくの なかに かきます。とうろくした もじは「しあげる」で つかえます。</p>
+      <div class="row"><span class="prog" id="glyphProg"></span>
+        <button class="btn main" id="btnGlyphNeed" hidden>📝 いまの ぶんしょうの もじから かく</button>
+        <button class="btn small" id="btnGlyphNext">まだの もじから はじめる</button>
+        <label class="hint tonly"><input type="checkbox" id="optGlyphModel" checked> おてほんを うすく だす</label></div>
+    </div>
+    <div class="card"><div class="glyphs" id="glyphGrid"></div></div>
+  </section>
+
+  <!-- せってい -->
+  <section class="view" id="v-setting" hidden>
+    <div class="settings-grid">
+      <div class="card">
+        <h2>つかうひと（じどうせいと）</h2>
+        <div class="field">なまえ（ひらがな）<input type="text" id="profName" aria-label="なまえ"></div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn small" id="btnProfRename">なまえを かえる</button>
+          <button class="btn small" id="btnProfAdd">＋ あたらしい ひと</button>
+          <button class="btn small warn" id="btnProfDel">このひとを けす</button>
+        </div>
+        <p class="hint">もじ・ことば・ほぞんした ぶんしょうは、ひとごとに わかれて ほぞんされます。</p>
+      </div>
+      <div class="card" style="grid-column:1/-1">
+        <h2>🧒 じどうせいとに みせるもの</h2>
+        <p class="hint">じどうせいと モードの ときだけ、ここで えらんだ ものが でます（せんせい モードでは ぜんぶ でます）。</p>
+        <div id="showBox"></div>
+      </div>
+      <div class="card">
+        <h2>よみあげ</h2>
+        <label class="field" style="flex-direction:row;align-items:center"><input type="checkbox" id="optSpeakPick"> ことばを えらんだら こえで よむ</label>
+        <p class="hint">せっていは ひとごとに ほぞんされます。うえの「つかうひと」を かえると、その ひとの せってい・フォント・しあげかたに かわります。</p>
+        <h2 style="margin-top:14px">ローマじ・キーボード</h2>
+        <div class="field">ローマじの かきかた
+          <select id="optRomaji"><option value="kunrei">くんれいしき（si・ti・tu・hu）</option><option value="hepburn">ヘボンしき（shi・chi・tsu・fu）</option></select></div>
+        <p class="hint">どちらで うっても ただしく はんていします。ガイドに だす かきかたを えらびます。</p>
+        <div class="field">キーの もじ
+          <select id="optCase"><option value="lower">こもじ（a b c）</option><option value="upper">おおもじ（A B C）</option></select></div>
+      </div>
+      <div class="card">
+        <h2>バックアップ（ひっこし）</h2>
+        <p class="hint">とうろくした もじなどを コードに して コピーできます。べつの iPad で「よみこむ」に はりつけると つかえます。</p>
+        <div class="row">
+          <button class="btn small" id="btnExport">コードを つくる</button>
+          <button class="btn small" id="btnCopyExport">コピー</button>
+          <button class="btn small" id="btnDownload" hidden>ファイルに ほぞん</button>
+        </div>
+        <textarea class="edit" id="exportBox" style="font-size:16px;font-family:monospace;min-height:80px" aria-label="バックアップコード"></textarea>
+        <div class="row">
+          <button class="btn small" id="btnImport">はりつけた コードを よみこむ</button>
+          <button class="btn small warn" id="btnUndoReplace" hidden>おきかえる まえに もどす</button>
+          <label class="btn small" style="display:inline-flex;align-items:center">ファイルから<input type="file" id="fileImport" accept=".json,application/json,text/plain" hidden></label>
+        </div>
+      </div>
+    </div>
+  </section>
+  <div id="printArea"></div>
+</main>
+<!-- 更新日: アプリを直したら、ここの日付を書きかえる（最新版が反映されたかの目印。せんせいモードだけ表示） -->
+<div class="app-version tonly">更新日 2026-10-30</div>

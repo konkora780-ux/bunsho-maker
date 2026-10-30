@@ -1,0 +1,13 @@
+{
+  "name": "bunsho-maker",
+  "private": true,
+  "description": "文章メーカー（特別支援学校むけ 文章づくり・タイピング・しあげ アプリ）",
+  "scripts": {
+    "build": "node tools/build.js",
+    "test": "node tests/run.js",
+    "test:quick": "node tests/run.js --quick"
+  },
+  "devDependencies": {
+    "playwright": "^1.40.0"
+  }
+}
