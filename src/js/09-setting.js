@@ -83,15 +83,17 @@ $('#btnDownload').addEventListener('click', () => {
 // id, name, glyphs, words, wordVerb, doc, docIds, docSrc（ふるい）, lineSrc, conn, cuts, cutsText, works, photos, hand, settings(+show), fin(+snap), mk, draft
 const SCHEMA_V = 2;
 // うえかぎりの きまり：アプリで つくれる りょう（ほぞん ばしょ いっぱいまで）より おおきく する。
-// かきだした コードは かならず よみこめる。けずった・すてた ものが あれば FIXES に かいて しらせる
+// いれる ときにも おなじ うえかぎりで とめる。よみこみで けずった・すてた ものが あれば かならず FIXES に かいて しらせる（だまって へらさない）
 const IMPORT_MAX = 32 * 1024 * 1024; // よみこむ コードの うえかぎり（もじすう）。iPad の ほぞん ばしょ（やく 500まんもじ）より ずっと おおきい
 const FILE_MAX = 96 * 1024 * 1024;   // よみこむ ファイルの うえかぎり（バイト）
-const LIM = { strokes: 200, pts: 5000, glyphs: 300, hand: 50000, doc: 1000, line: 2000, works: 5000, text: 2001000, words: 500 };
+const LIM = { strokes: 200, pts: 5000, glyphs: 300, hand: 2001000, doc: 1000, line: 2000, works: 5000, text: 2001000, words: 500 };
 let FIXES = null; // cleanProfile で なおした ことの メモ（null の ときは メモ しない）
 const note = m => { if (FIXES && !FIXES.includes(m)) FIXES.push(m); };
 const obj = v => v && typeof v === 'object' && !Array.isArray(v) ? v : {};
 const arr = v => Array.isArray(v) ? v : [];
-const str = (v, max, d = '') => typeof v === 'string' ? v.slice(0, max) : d;
+// うえかぎりで けずる ときは、かならず しらせる（だまって へらさない）
+const cut = (v, max, what) => { if (v.length > max) note(`${what}が おおすぎた・ながすぎたので ${max}${typeof v === 'string' ? 'もじ' : 'こ'}までに しました`); return v.slice(0, max); };
+const str = (v, max, d = '', what = 'もじ') => typeof v === 'string' ? cut(v, max, what) : d;
 const num = (v, lo, hi, d) => typeof v === 'number' && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d;
 const int = (v, lo, hi, d) => Number.isInteger(v) && v >= lo && v <= hi ? v : d;
 const pick = (v, list, d) => list.includes(v) ? v : d;
@@ -99,18 +101,23 @@ const bool = (v, d) => typeof v === 'boolean' ? v : d;
 const clone = v => JSON.parse(JSON.stringify(v));
 // せん：[[x,y],…] の あつまり（ざひょうは 0〜1 ふきん）。へんな ものは のぞく
 function cleanStrokes(v) {
-  return arr(v).slice(0, LIM.strokes).map(st => arr(st).slice(0, LIM.pts)
-    .filter(p => Array.isArray(p) && p.length === 2 && p.every(n => typeof n === 'number' && isFinite(n))).map(p => p.map(n => Math.min(2, Math.max(-1, n)))))
-    .filter(st => st.length);
+  const ok = p => Array.isArray(p) && p.length === 2 && p.every(n => typeof n === 'number' && isFinite(n));
+  return cut(arr(v), LIM.strokes, '1もじの せん').map(st => {
+    const a = cut(arr(st), LIM.pts, '1ぽんの せんの てん'), b = a.filter(ok);
+    if (b.length < a.length) note('せんの なかの おかしな てんを のぞきました');
+    if (b.some(p => p.some(n => n < -1 || n > 2))) note('わくから おおきく はみでた せんを わくの ちかくに よせました');
+    return b.map(p => p.map(n => Math.min(2, Math.max(-1, n))));
+  }).filter(st => st.length);
 }
 function cleanGlyphs(v) {
   const g = {};
-  Object.entries(obj(v)).slice(0, LIM.glyphs).forEach(([c, st]) => { if ([...c].length === 1) { const s = cleanStrokes(st); if (s.length) g[c] = s; } });
+  cut(Object.entries(obj(v)), LIM.glyphs, 'とうろくした もじ').forEach(([c, st]) => { if ([...c].length === 1) { const s = cleanStrokes(st); if (s.length) g[c] = s; } });
   return g;
 }
 function cleanHand(v) {
   const h = {};
-  Object.entries(obj(v)).slice(0, LIM.hand).forEach(([k, x]) => {
+  if (Array.isArray(v) && v.length) note('まえの かたちの てがき（シートに じかに かいた せん）は いまの ぶんしょうでは つかえないので のぞきました');
+  cut(Object.entries(obj(v)), LIM.hand, 'てがきの もじ').forEach(([k, x]) => {
     if (!/^\d+$/.test(k) || !x || typeof x.ch !== 'string' || [...x.ch].length !== 1) return;
     const s = cleanStrokes(x.s); if (s.length) h[k] = { ch: x.ch, s };
   });
@@ -127,7 +134,7 @@ function cleanFin(v) {
     grid: bool(o.grid, d.grid), name: bool(o.name, d.name), model: bool(o.model, d.model), penOnly: bool(o.penOnly, d.penOnly), sentBreak: bool(o.sentBreak, d.sentBreak),
     font: int(o.font, 0, FONTS.length - 1, d.font), weight: num(o.weight, 0.02, 0.2, d.weight), size: num(o.size, 0.3, 1, d.size),
     use: pick(o.use, Object.keys(USES), d.use), paper: pick(o.paper, Object.keys(PAPERS), d.paper), gstyle: pick(o.gstyle, Object.keys(GSTYLES), o.grid === false ? 'none' : d.gstyle),
-    title: str(o.title, 60), breaks: intList(o.breaks, LIM.text),
+    title: str(o.title, 60, '', 'だい'), breaks: intList(o.breaks, LIM.text),
   };
   if (o.snap) f.snap = cleanSnap(o.snap);
   if (!f.snap) delete f.snap;
@@ -136,24 +143,25 @@ function cleanFin(v) {
 // ひらいた さくひんの「その ときの もじ・なまえ」
 function cleanSnap(v) {
   const o = obj(v); if (typeof o.text !== 'string') return null;
-  return { id: str(o.id, 40), text: str(o.text, LIM.text), nameText: str(o.nameText, 30), glyphs: o.glyphs ? cleanGlyphs(o.glyphs) : null };
+  return { id: str(o.id, 40), text: str(o.text, LIM.text, '', 'ひらいた さくひんの ぶん'), nameText: str(o.nameText, 30, '', 'なまえ'), glyphs: o.glyphs ? cleanGlyphs(o.glyphs) : null };
 }
 function cleanWork(v) {
   const o = obj(v); if (typeof o.text !== 'string' || !o.text) return null;
-  const w = Object.assign(cleanFin(o), { id: str(o.id, 40) || 'w' + Date.now() + Math.random().toString(36).slice(2, 5), date: str(o.date, 40), text: o.text.slice(0, LIM.text), nameText: str(o.nameText, 30), conn: bool(o.conn, false) });
+  const w = Object.assign(cleanFin(o), { id: str(o.id, 40) || 'w' + Date.now() + Math.random().toString(36).slice(2, 5), date: str(o.date, 40), text: str(o.text, LIM.text, '', 'さくひんの ぶん'), nameText: str(o.nameText, 30, '', 'なまえ'), conn: bool(o.conn, false) });
   delete w.snap;
   if (o.glyphs) w.glyphs = cleanGlyphs(o.glyphs);
-  if (o.hand) w.hand = cleanHand(o.hand);
+  // ふるい かたち：シートに じかに かいた せん（はいれつ）も のこす
+  if (o.hand) w.hand = Array.isArray(o.hand) ? cleanStrokes(o.hand) : cleanHand(o.hand);
   return w;
 }
 const tplIds = () => TPLS.map(t => t.id);
-function cleanVals(v) { const r = {}; Object.entries(obj(v)).forEach(([k, x]) => { if (/^\d+$/.test(k) && typeof x === 'string') r[k] = x.slice(0, 60); }); return r; }
+function cleanVals(v) { const r = {}; Object.entries(obj(v)).forEach(([k, x]) => { if (/^\d+$/.test(k) && typeof x === 'string') r[k] = str(x, 60, '', 'えらんだ ことば'); }); return r; }
 function cleanDocSrc(v) {
   const r = {};
-  Object.entries(obj(v)).slice(0, LIM.doc * 3).forEach(([k, x]) => { if (x && tplIds().includes(x.tpl)) r[k.slice(0, LIM.line)] = { tpl: x.tpl, vals: cleanVals(x.vals) }; });
+  cut(Object.entries(obj(v)), LIM.doc * 3, 'ぶんの つくりかた').forEach(([k, x]) => { if (x && tplIds().includes(x.tpl)) r[str(k, LIM.line, '', 'ぶん')] = { tpl: x.tpl, vals: cleanVals(x.vals) }; });
   return r;
 }
-const cleanDoc = v => arr(v).filter(s => typeof s === 'string').slice(0, LIM.doc).map(s => s.slice(0, LIM.line));
+const cleanDoc = v => cut(arr(v).filter(s => typeof s === 'string'), LIM.doc, 'ぶん').map(s => str(s, LIM.line, '', '1つの ぶん'));
 function cleanShow(v) {
   const o = obj(v), sh = showDef();
   const ids = (l, all) => l === null || l === undefined ? null : [...new Set(arr(l).filter(x => all.includes(x)))];
@@ -162,7 +170,7 @@ function cleanShow(v) {
   if (sh.tpls && !sh.tpls.length) { sh.tpls = [SHOW_MIN.tpl]; note('「みせるもの」の ぶんの かたが 0こ だったので「がんばったこと」だけに しました'); }
   if (sh.modes && !sh.modes.length) { sh.modes = [SHOW_MIN.mode]; note('「みせるもの」の しあげかたが 0こ だったので「iPadの もじ」だけに しました'); }
   sh.glyph = bool(o.glyph, true); sh.practice = bool(o.practice, true); sh.stat = bool(o.stat, true); sh.max = pick(o.max, [0, 2, 3, 4, 6], 0);
-  const wl = l => [...new Set(arr(l).filter(x => typeof x === 'string').map(x => x.slice(0, 60)))].slice(0, LIM.words);
+  const wl = l => cut([...new Set(arr(l).filter(x => typeof x === 'string').map(x => str(x, 60, '', 'ことば')))], LIM.words, 'かくす・さきに だす ことば');
   Object.keys(SLOTS).forEach(k => { if (obj(o.hide)[k]) sh.hide[k] = wl(o.hide[k]); if (obj(o.pin)[k]) sh.pin[k] = wl(o.pin[k]); });
   return sh;
 }
@@ -176,28 +184,28 @@ function cleanSettings(v) {
   };
 }
 function cleanMk(v) {
-  const o = obj(v), m = { tpl: pick(o.tpl, tplIds(), 'gamba'), vals: cleanVals(o.vals), active: null, free: str(o.free, LIM.line) };
+  const o = obj(v), m = { tpl: pick(o.tpl, tplIds(), 'gamba'), vals: cleanVals(o.vals), active: null, free: str(o.free, LIM.line, '', 'つくりかけの ぶん') };
   if (Number.isInteger(o.editIdx) && o.editIdx >= 0 && o.editIdx < LIM.doc) m.editIdx = o.editIdx;
   return m;
 }
 // ぶんしょうの さぎょう じょうたい（したがき にも つかう）
 function cleanWorkState(o) {
-  return { doc: cleanDoc(o.doc), hand: cleanHand(o.hand), fin: cleanFin(o.fin), docSrc: cleanDocSrc(o.docSrc), lineSrc: cleanDocSrc(o.lineSrc), conn: bool(o.conn, false), cuts: intList(o.cuts, LIM.text), cutsText: str(o.cutsText, LIM.text), docIds: arr(o.docIds).filter(x => typeof x === 'string').map(x => x.slice(0, 40)).slice(0, LIM.doc) };
+  return { doc: cleanDoc(o.doc), hand: cleanHand(o.hand), fin: cleanFin(o.fin), docSrc: cleanDocSrc(o.docSrc), lineSrc: cleanDocSrc(o.lineSrc), conn: bool(o.conn, false), cuts: intList(o.cuts, LIM.text), cutsText: str(o.cutsText, LIM.text, '', 'くぎりの ぶん'), docIds: cut(arr(o.docIds).filter(x => typeof x === 'string').map(x => str(x, 40)), LIM.doc, 'ぶんの id') };
 }
 // よみこむ データを しらべて、へんな ところを とりのぞく（ほぞん して ある データにも つかう）
 function cleanProfile(src) {
   if (!src || typeof src !== 'object' || Array.isArray(src)) return null;
   const words = {};
-  Object.entries(obj(src.words)).forEach(([k, l]) => { if (SLOTS[k]) words[k] = [...new Set(arr(l).filter(w => typeof w === 'string').map(w => normText(w).slice(0, 30)).filter(Boolean))].slice(0, LIM.words); });
+  Object.entries(obj(src.words)).forEach(([k, l]) => { if (SLOTS[k]) words[k] = cut([...new Set(arr(l).filter(w => typeof w === 'string').map(w => str(normText(w), 30, '', 'ことば')).filter(Boolean))], LIM.words, 'ことば'); });
   const wordVerb = {};
-  Object.entries(obj(src.wordVerb)).forEach(([w, v]) => { if (VERBS[v]) wordVerb[w.slice(0, 30)] = v; });
-  const p = newProfile(typeof src.name === 'string' && src.name.trim() ? src.name.trim().slice(0, 30) : 'よみこんだひと');
+  Object.entries(obj(src.wordVerb)).forEach(([w, v]) => { if (VERBS[v]) wordVerb[str(w, 30, '', 'ことば')] = v; });
+  const p = newProfile(typeof src.name === 'string' && src.name.trim() ? str(src.name.trim(), 30, '', 'なまえ') : 'よみこんだひと');
   if (typeof src.id === 'string' && /^[\w-]{1,40}$/.test(src.id)) p.id = src.id;
   const ws = cleanWorkState(src);
   const name = p.name;
   Object.assign(p, ws, {
     glyphs: cleanGlyphs(src.glyphs), words, wordVerb,
-    works: arr(src.works).slice(0, LIM.works).map(cleanWork).filter(Boolean),
+    works: cut(arr(src.works), LIM.works, 'さくひん').map(cleanWork).filter(Boolean),
     photos: arr(src.photos).filter(x => x && typeof x.d === 'string' && x.d.startsWith('data:image/jpeg;base64,') && x.d.length < 400000).slice(0, PHOTO_MAX).map(x => ({ d: x.d, date: str(x.date, 40) })),
     settings: cleanSettings(src.settings), mk: cleanMk(src.mk),
   });
@@ -218,7 +226,7 @@ function cleanProfile(src) {
 }
 // コードを しらべる：{ app, v, profile } か { app, v, profiles:[…] }（ぜんいんぶん）
 function parseCode(txt) {
-  if (txt.length > IMPORT_MAX) return { err: `コードが おおきすぎます（${Math.round(txt.length / 1e6)}まんもじ。うえかぎりは ${IMPORT_MAX / 1e6 | 0}まんもじ）` };
+  if (txt.length > IMPORT_MAX) return { err: `コードが おおきすぎます（${Math.round(txt.length / 1e4)}まんもじ。うえかぎりは ${IMPORT_MAX / 1e4 | 0}まんもじ）` };
   let o; try { o = JSON.parse(txt); } catch (e) { return { err: 'コードが よみこめません' }; }
   if (!o || o.app !== 'bunsho-maker') return { err: '文章メーカーの コードでは ありません' };
   if (typeof o.v === 'number' && o.v > SCHEMA_V) return { err: 'あたらしい 文章メーカーで つくった コードです。アプリを さいしんに してください' };

@@ -20,9 +20,13 @@ function drawStrokes(ctx, strokes, ox, oy, size, lw, color) {
 // 指・ペンで かく（logical: 画面座標→論理座標）
 function attachDraw(cv, o) {
   let cur = null;
-  const pos = e => { const r = cv.getBoundingClientRect(); return o.toLogical((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height); };
+  // わくの そとまで ひっぱっても、ほぞんできる はんい（-1〜2）に おさめる
+  const cl = v => Math.min(2, Math.max(-1, v));
+  const pos = e => { const r = cv.getBoundingClientRect(); return o.toLogical(cl((e.clientX - r.left) / r.width), cl((e.clientY - r.top) / r.height)); };
   cv.addEventListener('pointerdown', e => {
     if (o.penOnly && o.penOnly() && e.pointerType === 'touch') return;
+    // せんの かずの うえかぎり（ほぞん・よみこみと おなじ）。こえる まえに とめて しらせる
+    if (o.count && o.count() >= LIM.strokes && !cur) { e.preventDefault(); return toast(`1つの もじの せんは ${LIM.strokes}ぽん までです`); }
     // かいている とちゅうに べつの ゆび・てのひらが ふれても、いまの せんを つづける。
     // ただし ゆび（てのひら）の あとに ペンが きたら、ゆびの せんを すてて ペンに する
     if (cur && cur.id !== e.pointerId) {
@@ -38,7 +42,7 @@ function attachDraw(cv, o) {
   cv.addEventListener('pointermove', e => {
     if (!cur || e.pointerId !== cur.id) return;
     const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
-    evs.forEach(ev => cur.pts.push(pos(ev)));
+    evs.forEach(ev => { if (cur.pts.length < LIM.pts - 1) cur.pts.push(pos(ev)); });
     o.onDraw(cur.pts);
   });
   const end = e => { if (!cur || e.pointerId !== cur.id) return; o.onEnd(cur.pts); cur = null; };

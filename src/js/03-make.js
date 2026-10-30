@@ -236,13 +236,14 @@ function renderChooser(key, idx) {
     box.append(el('button', { class: 'btn small warn tonly', 'aria-label': x.w + ' を けす', onclick: () => { P().words[key] = mine.filter(y => y !== x.w); saveDB(); renderChooser(key, idx); } }, '✕'));
   });
   ch.append(box);
-  const inp = el('input', { type: 'text', placeholder: 'あたらしい ことば', 'aria-label': 'あたらしい ことば', style: 'padding:10px;border-radius:10px;border:2px solid var(--line);flex:1;min-width:0' });
+  const inp = el('input', { type: 'text', maxlength: 30, placeholder: 'あたらしい ことば', 'aria-label': 'あたらしい ことば', style: 'padding:10px;border-radius:10px;border:2px solid var(--line);flex:1;min-width:0' });
   // 「なにを」には、そのことばに あう うごきも えらぶ
   const vsel = el('select', { 'aria-label': 'どうする', style: 'padding:10px;border-radius:10px;border:2px solid var(--line);background:#fff' });
   Object.entries(VERBS).forEach(([k, v]) => vsel.append(el('option', { value: k }, '〜を ' + v.n)));
   ch.append(el('div', { class: 'row tonly', style: 'margin-top:10px' }, inp, key === 'nani' ? vsel : '',
     el('button', { class: 'btn small', onclick: () => {
-      const w = normText(inp.value.trim()); if (!w) return;
+      const w = normText(inp.value.trim()).slice(0, 30); if (!w) return;
+      if ((P().words[key] || []).length >= LIM.words) return toast(`ことばは ${LIM.words}こ までです`);
       (P().words[key] = P().words[key] || []).push(w);
       if (key === 'nani') (P().wordVerb = P().wordVerb || {})[w] = vsel.value;
       saveDB(); pick(w);
@@ -259,8 +260,11 @@ function renderPreview() {
 }
 // じゅんじょの ことば（1ぎょうめ・あいだ・さいごの ぎょう）
 const CONN = ['はじめに、', 'つぎに、', 'さいごに、'];
-// じどうで つけた ことばを とる。つけて いる とき（P().conn）だけ とる：じぶんで かいた「はじめに、」は ぶんの いちぶ
-const stripConn = s => { const c = P().conn && CONN.find(c => s.startsWith(c)); return c ? s.slice(c.length) : s; };
+// じどうで つけた ことばを とる。じどうの ことばが ほんとうに ついて いる とき（チェックが はいって いて、ぶんが 2つ いじょう）だけ とる
+// じぶんで かいた「はじめに、」は ぶんの いちぶ（1ぶんの ときは じどうの ことばは つかないので とらない）
+const connOn = () => !!P().conn && P().doc.length >= 2;
+const connAt = (j, n) => CONN[j === 0 ? 0 : j === n - 1 ? 2 : 1];
+const stripConn = s => { const c = connOn() && CONN.find(c => s.startsWith(c)); return c ? s.slice(c.length) : s; };
 const isSpCh = c => c === ' ' || c === '　';
 const nsLen = s => [...s].filter(c => !isSpCh(c)).length;
 // ぶんごとの id（ならべかえ・なおし を しても かわらない なまえ）
@@ -288,7 +292,7 @@ function setDoc(entries, how, dry) {
   let no = 0, nq = 0;
   entries.forEach(({ i, body }, j) => {
     const s = i >= 0 ? old[i] : '', oldPre = i >= 0 ? s.length - stripConn(s).length : 0;
-    const pre = how === 'keep' ? s.slice(0, oldPre) : how === 'conn' && n >= 2 ? CONN[j === 0 ? 0 : j === n - 1 ? 2 : 1] : '';
+    const pre = how === 'keep' ? s.slice(0, oldPre) : how === 'conn' && n >= 2 ? connAt(j, n) : '';
     const ns = pre + body, sh = pre.length - oldPre;
     // なかみが おなじ ときだけ ひきつぐ
     if (i >= 0 && stripConn(s) === body) {
@@ -358,6 +362,8 @@ $('#btnAddSent').addEventListener('click', () => {
   if (!sentenceComplete()) return;
   const s = sentenceText(), t = TPLS.find(t => t.id === mk.tpl);
   const how = P().conn ? 'conn' : 'keep', ed = mk.editIdx != null && mk.editIdx < P().doc.length;
+  if (!ed && P().doc.length >= LIM.doc) return toast(`ぶんは ${LIM.doc}こ までです`);
+  if (s.length > LIM.line) return toast(`1つの ぶんは ${LIM.line}もじ までです`);
   const ents = keepAll(), at = ed ? mk.editIdx : ents.length; if (ed) ents[at].body = s; else ents.push({ i: -1, body: s });
   const src = t.id !== 'jiyu' ? { tpl: mk.tpl, vals: Object.assign({}, mk.vals) } : null;
   confirmLoss(setDoc(ents, how, true), () => {
@@ -373,9 +379,13 @@ $('#btnClearSlots').addEventListener('click', () => { mk.vals = {}; mk.active = 
 $('#btnApplyEdit').addEventListener('click', () => {
   // おなじ ぶんは ひきつぐ（てがき・くぎりも）。かわった ぶんは あたらしい ぶん
   const used = new Set(), old = P().doc;
-  const ents = $('#docEdit').value.split('\n').map(s => normText(s.trim())).filter(Boolean).map(t => {
-    const i = old.findIndex((o, k) => o === t && !used.has(k)); if (i >= 0) used.add(i);
-    return { i, body: stripConn(t) };
+  const ls = $('#docEdit').value.split('\n').map(s => normText(s.trim())).filter(Boolean), n = ls.length;
+  if (n > LIM.doc || ls.some(t => t.length > LIM.line)) return toast(`ぶんは ${LIM.doc}ぎょう、1ぎょう ${LIM.line}もじ までです`);
+  const ents = ls.map((t, j) => {
+    const i = old.findIndex((o, k) => o === t && !used.has(k)); if (i >= 0) { used.add(i); return { i, body: stripConn(t) }; }
+    // あたらしく かいた ぎょう：その ばしょの じどうの ことばと おなじ ときだけ じどうの ことばと みなす（ちがう ことばは ぶんの いちぶ）
+    const c = connOn() && n >= 2 && connAt(j, n);
+    return { i: -1, body: c && t.startsWith(c) ? t.slice(c.length) : t };
   });
   // つけて いる ときは、あたらしい ぎょうにも ばしょに あった ことばを つける
   const how = P().conn ? 'conn' : 'keep';

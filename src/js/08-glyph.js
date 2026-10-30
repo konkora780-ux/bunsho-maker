@@ -58,6 +58,7 @@ function openReg(ch, queue) {
   attachDraw(cv, {
     toLogical: (fx, fy) => [fx, fy],
     penOnly: () => fin.penOnly,
+    count: () => strokes.length,
     onDraw: pts => paint(pts),
     onEnd: pts => { strokes.push(simplify(pts, 0.006)); paint(); },
   });

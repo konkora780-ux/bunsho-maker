@@ -306,7 +306,7 @@ label.btn{display:inline-flex;align-items:center;cursor:pointer}
         <label id="lblWeight">せんの ふとさ <select id="optWeight"><option value="0.05">ほそい</option><option value="0.075" selected>ふつう</option><option value="0.1">ふとい</option></select></label>
       </div>
       <div class="opts" style="margin-top:8px">
-        <label>だい <input type="text" id="optTitle" placeholder="（なくても よい）" style="width:12em"></label>
+        <label>だい <input type="text" id="optTitle" maxlength="60" placeholder="（なくても よい）" style="width:12em"></label>
         <label><input type="checkbox" id="optName"> なまえを いれる</label>
         <label><input type="checkbox" id="optSentBreak" checked> ぶんごとに かいぎょう</label>
         <button class="btn small" id="btnBrMode">↵ かいぎょうを なおす</button>
@@ -379,7 +379,7 @@ label.btn{display:inline-flex;align-items:center;cursor:pointer}
     <div class="settings-grid">
       <div class="card">
         <h2>つかうひと（じどうせいと）</h2>
-        <div class="field">なまえ（ひらがな）<input type="text" id="profName" aria-label="なまえ"></div>
+        <div class="field">なまえ（ひらがな）<input type="text" id="profName" maxlength="30" aria-label="なまえ"></div>
         <div class="row" style="margin-top:10px">
           <button class="btn small" id="btnProfRename">なまえを かえる</button>
           <button class="btn small" id="btnProfAdd">＋ あたらしい ひと</button>

@@ -323,6 +323,7 @@ function savePad() {
 attachDraw($('#handPad'), {
   toLogical: (fx, fy) => [fx, fy],
   penOnly: () => fin.penOnly,
+  count: () => padStrokes.length,
   onDraw: pts => paintPad(pts),
   onEnd: pts => { padStrokes.push(simplify(pts, 0.006)); paintPad(); savePad(); },
 });
