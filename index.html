@@ -852,7 +852,8 @@ function renderPreview() {
 }
 // じゅんじょの ことば（1ぎょうめ・あいだ・さいごの ぎょう）
 const CONN = ['はじめに、', 'つぎに、', 'さいごに、'];
-const stripConn = s => { const c = CONN.find(c => s.startsWith(c)); return c ? s.slice(c.length) : s; };
+// じどうで つけた ことばを とる。つけて いる とき（P().conn）だけ とる：じぶんで かいた「はじめに、」は ぶんの いちぶ
+const stripConn = s => { const c = P().conn && CONN.find(c => s.startsWith(c)); return c ? s.slice(c.length) : s; };
 const isSpCh = c => c === ' ' || c === '　';
 const nsLen = s => [...s].filter(c => !isSpCh(c)).length;
 // ぶんごとの id（ならべかえ・なおし を しても かわらない なまえ）
@@ -918,7 +919,8 @@ function moveLine(i, d) {
   [ord[i], ord[j]] = [ord[j], ord[i]];
   relayDoc(ord, P().conn ? 'conn' : 'keep'); saveDB(); renderDoc();
 }
-$('#optConn').addEventListener('change', e => { P().conn = e.target.checked; relayDoc(ident(), P().conn ? 'conn' : 'strip'); saveDB(); renderDoc(); });
+// きりかえる まえの じょうたいで ぶんを よむ（とる ときは じどうの ことばだけ とる）
+$('#optConn').addEventListener('change', e => { const on = e.target.checked; if (on === !!P().conn) return; relayDoc(ident(), on ? 'conn' : 'strip'); P().conn = on; saveDB(); renderDoc(); });
 function renderDoc() {
   const p = P(), dl = $('#docList'); dl.innerHTML = '';
   $('#optConn').checked = !!p.conn;
@@ -966,9 +968,11 @@ $('#btnApplyEdit').addEventListener('click', () => {
   const used = new Set(), old = P().doc;
   const ents = $('#docEdit').value.split('\n').map(s => normText(s.trim())).filter(Boolean).map(t => {
     const i = old.findIndex((o, k) => o === t && !used.has(k)); if (i >= 0) used.add(i);
-    return i >= 0 ? { i, body: stripConn(t) } : { i: -1, body: t };
+    return { i, body: stripConn(t) };
   });
-  confirmLoss(setDoc(ents, 'keep', true), () => { setDoc(ents, 'keep'); renderDoc(); if (saveDB()) toast('なおしました'); });
+  // つけて いる ときは、あたらしい ぎょうにも ばしょに あった ことばを つける
+  const how = P().conn ? 'conn' : 'keep';
+  confirmLoss(setDoc(ents, how, true), () => { setDoc(ents, how); renderDoc(); if (saveDB()) toast('なおしました'); });
 });
 $('#btnClearDoc').addEventListener('click', function () {
   if (this.dataset.c !== '1') { this.dataset.c = '1'; const hn = Object.keys(handChars()).length; this.textContent = hn ? `ほんとうに けす？（てがき ${hn}もじも きえます）` : 'ほんとうに けす？'; setTimeout(() => { this.dataset.c = ''; this.textContent = 'ぜんぶ けす'; }, 3000); return; }

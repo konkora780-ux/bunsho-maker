@@ -91,3 +91,19 @@ test('P1 PDF：とちゅうで しっぱいしても キャンバスを てば�
   eq(r, { err: 'x', freed: true });
   noErr(pg);
 });
+
+test('P1 じぶんで かいた「はじめに、」は、ならべかえ・じゅんじょの ことばの つけはずしで きえない', async b => {
+  const pg = await openPage(b);
+  const r = await pg.evaluate(() => {
+    const p = P(); p.conn = false; p.doc = ['あめ。', 'はじめに、いぬ。']; delete p.docIds; saveDB();
+    moveLine(1, -1); const moved = p.doc.slice();
+    const box = $('#optConn'); box.checked = true; box.dispatchEvent(new Event('change'));
+    const on = p.doc.slice();
+    moveLine(0, 1); const onMoved = p.doc.slice();
+    box.checked = false; box.dispatchEvent(new Event('change'));
+    return { moved, on, onMoved, off: p.doc.slice() };
+  });
+  eq(r, { moved: ['はじめに、いぬ。', 'あめ。'], on: ['はじめに、はじめに、いぬ。', 'さいごに、あめ。'],
+    onMoved: ['はじめに、あめ。', 'さいごに、はじめに、いぬ。'], off: ['あめ。', 'はじめに、いぬ。'] });
+  noErr(pg);
+});
