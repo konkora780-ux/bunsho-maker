@@ -20,7 +20,8 @@ function applyRole() {
   $('#roleLb').textContent = st ? '🧒 じどうせいと' : '🧑‍🏫 せんせい';
   $('#whoName').textContent = P().name;
   $('#steps button[data-v=glyph]').hidden = st && !SH().glyph;
-  if (st && (currentView === 'setting' || (currentView === 'glyph' && !SH().glyph))) show('make');
+  $('#steps button[data-v=type]').hidden = !practiceOn();
+  if (st && (currentView === 'setting' || (currentView === 'glyph' && !SH().glyph) || (currentView === 'type' && !practiceOn()))) show('make');
   else if (currentView === 'make' || currentView === 'finish') show(currentView);
 }
 (() => {

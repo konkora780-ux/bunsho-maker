@@ -58,9 +58,15 @@ test('D4 ほうこくする・おねがい', async b => {
   await pg.click('#btnAddSent');
   await pg.locator('#tplList button', { hasText: 'おねがい' }).click();
   await chip(pg, 'ともだち'); await chip(pg, 'がっき');
-  eq(await pg.$$eval('#chooser .chip', a => a.map(x => x.textContent)), ['🙋てつだってください。', '💡おしえてください。', '👀みてください。', '🤝いっしょにえんそうしてください。']);
+  eq(await pg.$$eval('#chooser .chip', a => a.map(x => x.textContent)), ['🙋がっきをえんそうするのをてつだってください。', '💡がっきのえんそうのしかたをおしえてください。', '👀がっきをえんそうしているところをみてください。', '🤝がっきをいっしょにえんそうしてください。']);
   await chip(pg, 'いっしょに'); await pg.click('#btnAddSent');
   eq(await pg.evaluate(() => P().doc), ['せんせい、きょう、うたをえがおでうたいました。', 'ともだち、がっきをいっしょにえんそうしてください。']);
+  // する の ことば・かく の ことば
+  await pg.locator('#tplList button', { hasText: 'おねがい' }).click();
+  await chip(pg, 'せんせい'); await chip(pg, 'そうじ');
+  eq(await pg.$$eval('#chooser .chip', a => a.map(x => x.textContent.slice(2))), ['そうじをてつだってください。', 'そうじのしかたをおしえてください。', 'そうじをしているところをみてください。', 'そうじをいっしょにしてください。']);
+  await pg.click('.slot >> nth=1'); await chip(pg, 'ひらがな'); await chip(pg, 'おしえて');
+  eq(await pg.evaluate(() => sentenceText()), 'せんせい、ひらがなのかきかたをおしえてください。');
   noErr(pg);
 });
 

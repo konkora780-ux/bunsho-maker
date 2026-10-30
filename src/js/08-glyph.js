@@ -1,6 +1,6 @@
 // ===== もじとうろく =====
 const GLYPH_ROWS = ['あいうえお', 'かきくけこ', 'さしすせそ', 'たちつてと', 'なにぬねの', 'はひふへほ', 'まみむめも', 'やゆよ', 'らりるれろ', 'わをん',
-  'がぎぐげご', 'ざじずぜぞ', 'だぢづでど', 'ばびぶべぼ', 'ぱぴぷぺぽ', 'ぁぃぅぇぉ', 'ゃゅょっ', '、。ー！？'];
+  'がぎぐげご', 'ざじずぜぞ', 'だぢづでど', 'ばびぶべぼ', 'ぱぴぷぺぽ', 'ゔ', 'ぁぃぅぇぉ', 'ゃゅょっゎ', '、。ー！？'];
 const GLYPH_ALL = GLYPH_ROWS.join('').split('');
 function drawGlyphThumb(cv, ch) {
   const s = 2, n = 44; cv.width = n * s; cv.height = n * s;
@@ -9,7 +9,10 @@ function drawGlyphThumb(cv, ch) {
   if (gl) drawStrokes(c, gl, 2, 2, n - 4, (n - 4) * 0.075, '#1b1b1b');
 }
 // いまの ぶんしょうで つかう のに、まだ とうろく していない もじ（でてくる じゅん）
-function neededGlyphs() { return [...new Set([...P().doc.join('')].filter(c => GLYPH_ALL.includes(c) && !P().glyphs[c]))]; }
+function neededGlyphs() {
+  const nm = fin.name ? (finO().nameText || P().name) : '';
+  return [...new Set([...P().doc.join('') + (fin.title || '') + nm].filter(c => GLYPH_ALL.includes(c) && !P().glyphs[c]))];
+}
 function renderGlyphGrid() {
   const g = $('#glyphGrid'); g.innerHTML = '';
   const need = neededGlyphs();

@@ -246,3 +246,23 @@ test('2-A ぶんを なおす・ふやす・けす ときの てがき／くぎ�
   eq(r3, [['かきく。', 'あたらしい。'], ['0']]);
   noErr(pg);
 });
+
+test('2-B うてない もじ・れんしゅうを はぶく・ミスを みせない・ひつような もじ', async b => {
+  const pg = await openPage(b);
+  // ぜんぶ うてない ぶん → 「できた」に しない
+  await pg.evaluate(() => { P().doc = ['漢字。']; saveDB(); show('type'); });
+  const t = await pg.textContent('#bigNow');
+  ok(!t.includes('できた'), 'ぜんぶ とばしたら できた に しない：' + t);
+  ok((await pg.textContent('#typeStat')).includes('漢'), 'とばす もじを みせる');
+  // れんしゅうを はぶく・ミスを みせない（じどうせいと モード）
+  await pg.evaluate(() => { P().doc = ['あい。']; SH().practice = false; SH().stat = false; DB.role = 'student'; applyRole(); show('make'); });
+  ok(!(await pg.isVisible('#steps button[data-v=type]')), '② の ボタンを かくす');
+  eq(await pg.textContent('#goType'), 'つぎへ：しあげる ▶');
+  await pg.click('#goType'); eq(await pg.evaluate(() => currentView), 'finish');
+  await pg.evaluate(() => { SH().practice = true; applyRole(); show('type'); });
+  ok(!(await pg.textContent('#typeStat')).includes('ミス'), 'ミスを みせない');
+  // ひつような もじに だい・なまえ・ゔ・ゎ
+  const need = await pg.evaluate(() => { P().doc = ['ゔぁ']; P().glyphs = {}; P().name = 'たろう'; fin.title = 'えんそく'; fin.name = true; return neededGlyphs().join(''); });
+  eq(need, 'ゔぁえんそくたろう');
+  noErr(pg);
+});

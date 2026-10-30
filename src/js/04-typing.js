@@ -123,7 +123,8 @@ function typingChunks() {
 }
 function startTyping() {
   const sents = typingChunks();
-  ty = { sents, si: 0, miss: 0, start: null };
+  // tot：うった もじの かず、skipped：うてないので とばした もじ（あとで みせる）
+  ty = { sents, si: 0, miss: 0, start: null, tot: 0, skipped: new Set() };
   loadSentence();
   $('#optFinger').checked = S().finger;
   $('#optGuide').value = String(S().guide);
@@ -158,6 +159,8 @@ function completeUnit() {
 function loadSentence() {
   const text = ty.sents[ty.si] || '';
   Object.assign(ty, { units: KANA_MODE() ? buildKanaUnits(text) : buildUnits(text), ui: 0, buf: '', pend: null, done: false, typed: [] });
+  ty.units.forEach(u => { if (u.skip && !u.br && !isSpCh(u.kana)) ty.skipped.add(u.kana); });
+  ty.n = ty.units.filter(u => !u.skip).length; ty.tot += ty.n;
   skipAuto();
   renderTarget(); renderBig(); renderKB();
 }
@@ -194,7 +197,9 @@ function renderTarget() {
     tg.append(el('span', { class: cls }, el('span', { class: 'k' }, kanaLabel(u.kana)), rEl));
   });
   const n = ty.units.filter(u => !u.skip).length, d = ty.units.slice(0, ty.ui).filter(u => !u.skip).length;
-  $('#typeStat').textContent = (ty.sents.length > 1 ? `${ty.si + 1}ばんめ／${ty.sents.length}　` : '') + `${d} / ${n} もじ　ミス ${ty.miss}`;
+  const stat = !isStudent() || SH().stat;
+  $('#typeStat').textContent = (ty.sents.length > 1 ? `${ty.si + 1}ばんめ／${ty.sents.length}　` : '') + `${d} / ${n} もじ` + (stat ? `　ミス ${ty.miss}` : '') +
+    (ty.skipped.size ? `　（うてないので とばす もじ：${[...ty.skipped].join(' ')}）` : '');
 }
 function renderBig() {
   const b = $('#bigNow'); b.innerHTML = '';
@@ -206,15 +211,18 @@ function renderBig() {
     const si = ty.si;
     const wait = { auto09: 900, auto2: 2000 }[S().advance];
     if (wait) ty.timer = setTimeout(() => { if (ty.si === si) nextSentence(); }, wait);
-    b.append(el('div', { class: 'done-box' }, '⭐ できた！',
+    b.append(el('div', { class: 'done-box' }, ty.n ? '⭐ できた！' : '（うてる もじが ないので とばしました）',
       el('div', { class: 'row', style: 'justify-content:center;margin-top:10px' },
         el('button', { class: 'btn main', onclick: nextSentence }, 'つぎへ ▶'))));
     return;
   }
   if (ty.done) {
     const sec = ty.start ? Math.round((Date.now() - ty.start) / 1000) : 0;
-    b.append(el('div', { class: 'done-box' }, '🎉 できたね！',
-      el('div', { class: 'stat' }, `じかん ${Math.floor(sec / 60)}ふん${sec % 60}びょう　ミス ${ty.miss}かい`),
+    // ぜんぶ とばした ときは「できた」に しない
+    const any = ty.tot > 0, stat = !isStudent() || SH().stat;
+    b.append(el('div', { class: 'done-box' }, any ? '🎉 できたね！' : 'この ぶんしょうには うてる もじが ありませんでした',
+      el('div', { class: 'stat' }, (any ? `うった もじ ${ty.tot}もじ` : '') + (any && stat ? `　じかん ${Math.floor(sec / 60)}ふん${sec % 60}びょう　ミス ${ty.miss}かい` : '')),
+      ty.skipped.size ? el('div', { class: 'stat' }, `うたなかった もじ：${[...ty.skipped].join(' ')}（しあげには そのまま でます）`) : '',
       el('div', { class: 'row', style: 'justify-content:center;margin-top:10px' },
         el('button', { class: 'btn main', onclick: () => show('finish') }, 'つぎへ：しあげる ▶'))));
     return;

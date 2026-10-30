@@ -529,7 +529,8 @@ function applyRole() {
   $('#roleLb').textContent = st ? '🧒 じどうせいと' : '🧑‍🏫 せんせい';
   $('#whoName').textContent = P().name;
   $('#steps button[data-v=glyph]').hidden = st && !SH().glyph;
-  if (st && (currentView === 'setting' || (currentView === 'glyph' && !SH().glyph))) show('make');
+  $('#steps button[data-v=type]').hidden = !practiceOn();
+  if (st && (currentView === 'setting' || (currentView === 'glyph' && !SH().glyph) || (currentView === 'type' && !practiceOn()))) show('make');
   else if (currentView === 'make' || currentView === 'finish') show(currentView);
 }
 (() => {
@@ -588,25 +589,26 @@ const SLOTS = {
   // だれに つたえる？（よびかけ）
   aite: { q: 'だれに つたえる？', w: [['せんせい', '🧑‍🏫'], ['おうちのひと', '🏠'], ['おかあさん', '👩'], ['おとうさん', '👨'], ['ともだち', '🧒'], ['くらすのみんな', '👫'], ['みなさん', '📣']] },
   // おねがいの ことば（「いっしょに〜」は えらんだ「なにを」で かわる）
-  help: { q: 'どうしてほしい？', w: [['てつだってください。', '🙋'], ['おしえてください。', '💡'], ['みてください。', '👀']] },
+  // 「なにを」の うごきに あわせて、つなぎの ことば（を・の）ごと つくる（renderChooser で つくる）
+  help: { q: 'どうしてほしい？', w: [] },
   feel2: { q: 'どうおもった？', w: [['たのしい', '😆'], ['うれしい', '😊'], ['もっとがんばりたい', '🔥'], ['すごい', '😲'], ['むずかしい', '😣'], ['こまった', '😥'], ['てつだってほしい', '🙋']] },
 };
 // うごきの かたち（した・して・できる）
 const VERBS = {
-  suru: { n: 'する', past: 'しました', te: 'して', pot: 'できる', tai: 'したい' },
-  utau: { n: 'うたう', past: 'うたいました', te: 'うたって', pot: 'うたえる', tai: 'うたいたい' },
-  odoru: { n: 'おどる', past: 'おどりました', te: 'おどって', pot: 'おどれる', tai: 'おどりたい' },
-  ensou: { n: 'えんそうする', past: 'えんそうしました', te: 'えんそうして', pot: 'えんそうできる', tai: 'えんそうしたい' },
-  taberu: { n: 'たべる', past: 'たべました', te: 'たべて', pot: 'たべられる', tai: 'たべたい' },
-  kaku: { n: 'かく', past: 'かきました', te: 'かいて', pot: 'かける', tai: 'かきたい' },
-  yomu: { n: 'よむ', past: 'よみました', te: 'よんで', pot: 'よめる', tai: 'よみたい' },
-  tsukuru: { n: 'つくる', past: 'つくりました', te: 'つくって', pot: 'つくれる', tai: 'つくりたい' },
-  oru: { n: 'おる', past: 'おりました', te: 'おって', pot: 'おれる', tai: 'おりたい' },
-  hashiru: { n: 'はしる', past: 'はしりました', te: 'はしって', pot: 'はしれる', tai: 'はしりたい' },
-  asobu: { n: 'あそぶ', past: 'あそびました', te: 'あそんで', pot: 'あそべる', tai: 'あそびたい' },
-  miru: { n: 'みる', past: 'みました', te: 'みて', pot: 'みられる', tai: 'みたい' },
-  hiku: { n: 'ひく', past: 'ひきました', te: 'ひいて', pot: 'ひける', tai: 'ひきたい' },
-  oyogu: { n: 'およぐ', past: 'およぎました', te: 'およいで', pot: 'およげる', tai: 'およぎたい' },
+  suru: { n: 'する', past: 'しました', te: 'して', pot: 'できる', tai: 'したい', kata: 'しかた' },
+  utau: { n: 'うたう', past: 'うたいました', te: 'うたって', pot: 'うたえる', tai: 'うたいたい', kata: 'うたいかた' },
+  odoru: { n: 'おどる', past: 'おどりました', te: 'おどって', pot: 'おどれる', tai: 'おどりたい', kata: 'おどりかた' },
+  ensou: { n: 'えんそうする', past: 'えんそうしました', te: 'えんそうして', pot: 'えんそうできる', tai: 'えんそうしたい', kata: 'えんそうのしかた' },
+  taberu: { n: 'たべる', past: 'たべました', te: 'たべて', pot: 'たべられる', tai: 'たべたい', kata: 'たべかた' },
+  kaku: { n: 'かく', past: 'かきました', te: 'かいて', pot: 'かける', tai: 'かきたい', kata: 'かきかた' },
+  yomu: { n: 'よむ', past: 'よみました', te: 'よんで', pot: 'よめる', tai: 'よみたい', kata: 'よみかた' },
+  tsukuru: { n: 'つくる', past: 'つくりました', te: 'つくって', pot: 'つくれる', tai: 'つくりたい', kata: 'つくりかた' },
+  oru: { n: 'おる', past: 'おりました', te: 'おって', pot: 'おれる', tai: 'おりたい', kata: 'おりかた' },
+  hashiru: { n: 'はしる', past: 'はしりました', te: 'はしって', pot: 'はしれる', tai: 'はしりたい', kata: 'はしりかた' },
+  asobu: { n: 'あそぶ', past: 'あそびました', te: 'あそんで', pot: 'あそべる', tai: 'あそびたい', kata: 'あそびかた' },
+  miru: { n: 'みる', past: 'みました', te: 'みて', pot: 'みられる', tai: 'みたい', kata: 'みかた' },
+  hiku: { n: 'ひく', past: 'ひきました', te: 'ひいて', pot: 'ひける', tai: 'ひきたい', kata: 'ひきかた' },
+  oyogu: { n: 'およぐ', past: 'およぎました', te: 'およいで', pot: 'およげる', tai: 'およぎたい', kata: 'およぎかた' },
 };
 function wordInfo(w) {
   const d = SLOTS.nani.w.find(x => x[0] === w);
@@ -631,7 +633,7 @@ const TPLS = [
   { id: 'deki', em: '⭐', name: 'できるようになったこと', parts: ['@nani', '#potp', '@how2', '#potv', 'ようになりました。'] },
   { id: 'omoi', em: '💭', name: 'おもったこと', parts: ['@nani', '#te', '、', '@feel2', 'とおもいました。'] },
   { id: 'hokoku', em: '📢', name: 'ほうこくする', parts: ['@aite', '、', '@itsu', '、', '@nani', 'を', '@how', '@gend'] },
-  { id: 'onegai', em: '🙏', name: 'おねがい', parts: ['@aite', '、', '@nani', 'を', '@help'] },
+  { id: 'onegai', em: '🙏', name: 'おねがい', parts: ['@aite', '、', '@nani', '', '@help'] },
   { id: 'tsugi', em: '🚀', name: 'つぎに がんばりたいこと', parts: ['つぎは、', '@nani', 'を', '@how', '@tend'] },
   { id: 'jiyu', em: '✍️', name: 'じゆうに かく', parts: [] },
 ];
@@ -651,7 +653,9 @@ function sentenceComplete() {
 const isStudent = () => DB.role === 'student';
 // null＝ぜんぶ だす、[…]＝えらんだ ものだけ。hide・pin は ひとごとに あたらしく つくる（ひとの あいだで まざらない）
 const MODE_IDS = ['glyph', 'font', 'hand'];
-const showDef = () => ({ tpls: null, modes: null, glyph: true, hide: {}, pin: {}, max: 0 });
+// practice：②うってみる を つかうか、stat：じかん・ミスの かずを みせるか（じどうせいと モード）
+const showDef = () => ({ tpls: null, modes: null, glyph: true, practice: true, stat: true, hide: {}, pin: {}, max: 0 });
+const practiceOn = () => !isStudent() || SH().practice !== false;
 function SH() {
   const s = S();
   if (!s.show) s.show = showDef();
@@ -744,7 +748,7 @@ function orderItems(key, items) {
 const DYN = {
   gend: [['#past', '〜ました（れい：うたいました）'], ['#gpast', 'がんばって〜ました'], ['#gamba', 'がんばりました。']],
   tend: [['#tai', '〜たいです（れい：うたいたいです）'], ['#gtai', 'がんばって〜たいです'], ['#gamba', 'がんばりたいです。']],
-  help: [['#issho', 'いっしょに〜してください。']],
+  help: [['#tetsu', '〜のを てつだってください。'], ['#oshie', '〜の しかたを おしえてください。'], ['#miru', '〜しているところを みてください。'], ['#issho', 'いっしょに〜してください。']],
 };
 function renderChooser(key, idx) {
   const ch = $('#chooser'); ch.innerHTML = '';
@@ -778,8 +782,16 @@ function renderChooser(key, idx) {
     }
   }
   if (key === 'help') {
-    const V = nw ? VERBS[wordInfo(nw).v] || VERBS.suru : VERBS.suru;
-    items.push({ id: '#issho', w: 'いっしょに' + V.te + 'ください。', em: '🤝' });
+    // れい（がっき）：がっきを えんそうするのを てつだって／がっきの えんそうのしかたを おしえて／がっきを えんそうしているところを みて
+    const vk = nw ? wordInfo(nw).v : 'suru', V = VERBS[vk] || VERBS.suru;
+    if (!nw) ch.append(el('div', { class: 'hint' }, 'さきに「なにを？」を えらぶと、あう ことばが でます。'));
+    items = [
+      { id: '#tetsu', w: (vk === 'suru' ? 'を' : 'を' + V.n + 'のを') + 'てつだってください。', em: '🙋' },
+      { id: '#oshie', w: 'の' + V.kata + 'をおしえてください。', em: '💡' },
+      { id: '#miru', w: 'を' + V.te + 'いるところをみてください。', em: '👀' },
+      { id: '#issho', w: 'をいっしょに' + V.te + 'ください。', em: '🤝' },
+    ];
+    items.forEach(x => { x.label = (nw || '〇〇') + x.w; });
   }
   const mine = (P().words[key] || []);
   items = orderItems(key, mine.map(w => ({ id: w, w, mine: true })).concat(items));
@@ -789,7 +801,7 @@ function renderChooser(key, idx) {
     if (SH().max > 0) items = items.slice(0, SH().max);
   }
   items.forEach(x => {
-    if (!x.mine) return box.append(el('button', { class: 'chip', onclick: () => pick(x.w) }, el('span', { class: 'em' }, x.em), x.w));
+    if (!x.mine) return box.append(el('button', { class: 'chip', onclick: () => pick(x.w) }, el('span', { class: 'em' }, x.em), x.label || x.w));
     box.append(el('button', { class: 'chip mine', onclick: () => pick(x.w) }, x.w));
     box.append(el('button', { class: 'btn small warn tonly', 'aria-label': x.w + ' を けす', onclick: () => { P().words[key] = mine.filter(y => y !== x.w); saveDB(); renderChooser(key, idx); } }, '✕'));
   });
@@ -893,11 +905,13 @@ function renderDoc() {
   const bad = [...new Set(p.doc.join('').split('').filter(c => !isTypable(c)))];
   $('#docWarn').textContent = bad.length ? '※ うてない もじが あります：' + bad.join(' ') + '（タイピングでは とばします）' : '';
   $('#goType').disabled = !p.doc.length;
+  $('#goType').textContent = practiceOn() ? 'つぎへ：うってみる ▶' : 'つぎへ：しあげる ▶';
 }
 // できた ぶんを よびだして、ことばを えらびなおす
 function editLine(i) {
   const s = P().doc[i], src = (P().docSrc || {})[stripConn(s)]; if (!src) return;
   mk = P().mk = { tpl: src.tpl, vals: Object.assign({}, src.vals), active: null, free: '', editIdx: i };
+  if (src.tpl === 'onegai' && mk.vals[4] && !/^[をの]/.test(mk.vals[4])) delete mk.vals[4];
   renderMake(); window.scrollTo(0, 0);
   speak(s); toast('なおしたい ことばを タップしてね');
 }
@@ -930,7 +944,7 @@ $('#btnClearDoc').addEventListener('click', function () {
   setDoc([], 'keep'); delete mk.editIdx; saveDB(); renderDoc(); this.dataset.c = ''; this.textContent = 'ぜんぶ けす';
 });
 $('#btnSpeakAll').addEventListener('click', () => speak(P().doc.join('')));
-$('#goType').addEventListener('click', () => show('type'));
+$('#goType').addEventListener('click', () => show(practiceOn() ? 'type' : 'finish'));
 
 // ===== ② タイピング（ローマ字エンジン） =====
 const K1 = {
@@ -1057,7 +1071,8 @@ function typingChunks() {
 }
 function startTyping() {
   const sents = typingChunks();
-  ty = { sents, si: 0, miss: 0, start: null };
+  // tot：うった もじの かず、skipped：うてないので とばした もじ（あとで みせる）
+  ty = { sents, si: 0, miss: 0, start: null, tot: 0, skipped: new Set() };
   loadSentence();
   $('#optFinger').checked = S().finger;
   $('#optGuide').value = String(S().guide);
@@ -1092,6 +1107,8 @@ function completeUnit() {
 function loadSentence() {
   const text = ty.sents[ty.si] || '';
   Object.assign(ty, { units: KANA_MODE() ? buildKanaUnits(text) : buildUnits(text), ui: 0, buf: '', pend: null, done: false, typed: [] });
+  ty.units.forEach(u => { if (u.skip && !u.br && !isSpCh(u.kana)) ty.skipped.add(u.kana); });
+  ty.n = ty.units.filter(u => !u.skip).length; ty.tot += ty.n;
   skipAuto();
   renderTarget(); renderBig(); renderKB();
 }
@@ -1128,7 +1145,9 @@ function renderTarget() {
     tg.append(el('span', { class: cls }, el('span', { class: 'k' }, kanaLabel(u.kana)), rEl));
   });
   const n = ty.units.filter(u => !u.skip).length, d = ty.units.slice(0, ty.ui).filter(u => !u.skip).length;
-  $('#typeStat').textContent = (ty.sents.length > 1 ? `${ty.si + 1}ばんめ／${ty.sents.length}　` : '') + `${d} / ${n} もじ　ミス ${ty.miss}`;
+  const stat = !isStudent() || SH().stat;
+  $('#typeStat').textContent = (ty.sents.length > 1 ? `${ty.si + 1}ばんめ／${ty.sents.length}　` : '') + `${d} / ${n} もじ` + (stat ? `　ミス ${ty.miss}` : '') +
+    (ty.skipped.size ? `　（うてないので とばす もじ：${[...ty.skipped].join(' ')}）` : '');
 }
 function renderBig() {
   const b = $('#bigNow'); b.innerHTML = '';
@@ -1140,15 +1159,18 @@ function renderBig() {
     const si = ty.si;
     const wait = { auto09: 900, auto2: 2000 }[S().advance];
     if (wait) ty.timer = setTimeout(() => { if (ty.si === si) nextSentence(); }, wait);
-    b.append(el('div', { class: 'done-box' }, '⭐ できた！',
+    b.append(el('div', { class: 'done-box' }, ty.n ? '⭐ できた！' : '（うてる もじが ないので とばしました）',
       el('div', { class: 'row', style: 'justify-content:center;margin-top:10px' },
         el('button', { class: 'btn main', onclick: nextSentence }, 'つぎへ ▶'))));
     return;
   }
   if (ty.done) {
     const sec = ty.start ? Math.round((Date.now() - ty.start) / 1000) : 0;
-    b.append(el('div', { class: 'done-box' }, '🎉 できたね！',
-      el('div', { class: 'stat' }, `じかん ${Math.floor(sec / 60)}ふん${sec % 60}びょう　ミス ${ty.miss}かい`),
+    // ぜんぶ とばした ときは「できた」に しない
+    const any = ty.tot > 0, stat = !isStudent() || SH().stat;
+    b.append(el('div', { class: 'done-box' }, any ? '🎉 できたね！' : 'この ぶんしょうには うてる もじが ありませんでした',
+      el('div', { class: 'stat' }, (any ? `うった もじ ${ty.tot}もじ` : '') + (any && stat ? `　じかん ${Math.floor(sec / 60)}ふん${sec % 60}びょう　ミス ${ty.miss}かい` : '')),
+      ty.skipped.size ? el('div', { class: 'stat' }, `うたなかった もじ：${[...ty.skipped].join(' ')}（しあげには そのまま でます）`) : '',
       el('div', { class: 'row', style: 'justify-content:center;margin-top:10px' },
         el('button', { class: 'btn main', onclick: () => show('finish') }, 'つぎへ：しあげる ▶'))));
     return;
@@ -1916,7 +1938,7 @@ $('#btnDraft').addEventListener('click', restoreDraft);
 
 // ===== もじとうろく =====
 const GLYPH_ROWS = ['あいうえお', 'かきくけこ', 'さしすせそ', 'たちつてと', 'なにぬねの', 'はひふへほ', 'まみむめも', 'やゆよ', 'らりるれろ', 'わをん',
-  'がぎぐげご', 'ざじずぜぞ', 'だぢづでど', 'ばびぶべぼ', 'ぱぴぷぺぽ', 'ぁぃぅぇぉ', 'ゃゅょっ', '、。ー！？'];
+  'がぎぐげご', 'ざじずぜぞ', 'だぢづでど', 'ばびぶべぼ', 'ぱぴぷぺぽ', 'ゔ', 'ぁぃぅぇぉ', 'ゃゅょっゎ', '、。ー！？'];
 const GLYPH_ALL = GLYPH_ROWS.join('').split('');
 function drawGlyphThumb(cv, ch) {
   const s = 2, n = 44; cv.width = n * s; cv.height = n * s;
@@ -1925,7 +1947,10 @@ function drawGlyphThumb(cv, ch) {
   if (gl) drawStrokes(c, gl, 2, 2, n - 4, (n - 4) * 0.075, '#1b1b1b');
 }
 // いまの ぶんしょうで つかう のに、まだ とうろく していない もじ（でてくる じゅん）
-function neededGlyphs() { return [...new Set([...P().doc.join('')].filter(c => GLYPH_ALL.includes(c) && !P().glyphs[c]))]; }
+function neededGlyphs() {
+  const nm = fin.name ? (finO().nameText || P().name) : '';
+  return [...new Set([...P().doc.join('') + (fin.title || '') + nm].filter(c => GLYPH_ALL.includes(c) && !P().glyphs[c]))];
+}
 function renderGlyphGrid() {
   const g = $('#glyphGrid'); g.innerHTML = '';
   const need = neededGlyphs();
@@ -2024,6 +2049,8 @@ function renderShowBox() {
   box.append(grp('ぶんの かた', ...TPLS.map(t => cb(!sh.tpls || sh.tpls.includes(t.id), t.em + t.name, (on, i) => listToggle('tpls', tIds, t.id, on, i)))));
   const mName = { glyph: 'じぶんの もじ', font: 'iPadの もじ', hand: 'てがき' };
   box.append(grp('しあげかた', ...MODE_IDS.map(m => cb(!sh.modes || sh.modes.includes(m), mName[m], (on, i) => listToggle('modes', MODE_IDS, m, on, i))), cb(sh.glyph, 'もじとうろくの ボタン', on => { sh.glyph = on; })));
+  box.append(grp('② うってみる', cb(sh.practice, 'にゅうりょくの れんしゅうを する（はずすと ①→③ に すすみます）', on => { sh.practice = on; }),
+    cb(sh.stat, 'じかん・ミスの かずを みせる', on => { sh.stat = on; })));
   const maxSel = el('select', { 'aria-label': 'ことばの かず' });
   [[0, 'ぜんぶ'], [2, '2こ'], [3, '3こ'], [4, '4こ'], [6, '6こ']].forEach(([v, t]) => maxSel.append(el('option', { value: v }, t)));
   maxSel.value = String(sh.max); maxSel.addEventListener('change', () => { sh.max = +maxSel.value; saveDB(); });
@@ -2161,7 +2188,7 @@ function cleanShow(v) {
   const o = obj(v), sh = showDef();
   const ids = (l, all) => l === null || l === undefined ? null : [...new Set(arr(l).filter(x => all.includes(x)))];
   sh.tpls = ids(o.tpls, tplIds()); sh.modes = ids(o.modes, MODE_IDS);
-  sh.glyph = bool(o.glyph, true); sh.max = pick(o.max, [0, 2, 3, 4, 6], 0);
+  sh.glyph = bool(o.glyph, true); sh.practice = bool(o.practice, true); sh.stat = bool(o.stat, true); sh.max = pick(o.max, [0, 2, 3, 4, 6], 0);
   const wl = l => [...new Set(arr(l).filter(x => typeof x === 'string').map(x => x.slice(0, 60)))].slice(0, LIM.words);
   Object.keys(SLOTS).forEach(k => { if (obj(o.hide)[k]) sh.hide[k] = wl(o.hide[k]); if (obj(o.pin)[k]) sh.pin[k] = wl(o.pin[k]); });
   return sh;

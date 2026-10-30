@@ -13,25 +13,26 @@ const SLOTS = {
   // だれに つたえる？（よびかけ）
   aite: { q: 'だれに つたえる？', w: [['せんせい', '🧑‍🏫'], ['おうちのひと', '🏠'], ['おかあさん', '👩'], ['おとうさん', '👨'], ['ともだち', '🧒'], ['くらすのみんな', '👫'], ['みなさん', '📣']] },
   // おねがいの ことば（「いっしょに〜」は えらんだ「なにを」で かわる）
-  help: { q: 'どうしてほしい？', w: [['てつだってください。', '🙋'], ['おしえてください。', '💡'], ['みてください。', '👀']] },
+  // 「なにを」の うごきに あわせて、つなぎの ことば（を・の）ごと つくる（renderChooser で つくる）
+  help: { q: 'どうしてほしい？', w: [] },
   feel2: { q: 'どうおもった？', w: [['たのしい', '😆'], ['うれしい', '😊'], ['もっとがんばりたい', '🔥'], ['すごい', '😲'], ['むずかしい', '😣'], ['こまった', '😥'], ['てつだってほしい', '🙋']] },
 };
 // うごきの かたち（した・して・できる）
 const VERBS = {
-  suru: { n: 'する', past: 'しました', te: 'して', pot: 'できる', tai: 'したい' },
-  utau: { n: 'うたう', past: 'うたいました', te: 'うたって', pot: 'うたえる', tai: 'うたいたい' },
-  odoru: { n: 'おどる', past: 'おどりました', te: 'おどって', pot: 'おどれる', tai: 'おどりたい' },
-  ensou: { n: 'えんそうする', past: 'えんそうしました', te: 'えんそうして', pot: 'えんそうできる', tai: 'えんそうしたい' },
-  taberu: { n: 'たべる', past: 'たべました', te: 'たべて', pot: 'たべられる', tai: 'たべたい' },
-  kaku: { n: 'かく', past: 'かきました', te: 'かいて', pot: 'かける', tai: 'かきたい' },
-  yomu: { n: 'よむ', past: 'よみました', te: 'よんで', pot: 'よめる', tai: 'よみたい' },
-  tsukuru: { n: 'つくる', past: 'つくりました', te: 'つくって', pot: 'つくれる', tai: 'つくりたい' },
-  oru: { n: 'おる', past: 'おりました', te: 'おって', pot: 'おれる', tai: 'おりたい' },
-  hashiru: { n: 'はしる', past: 'はしりました', te: 'はしって', pot: 'はしれる', tai: 'はしりたい' },
-  asobu: { n: 'あそぶ', past: 'あそびました', te: 'あそんで', pot: 'あそべる', tai: 'あそびたい' },
-  miru: { n: 'みる', past: 'みました', te: 'みて', pot: 'みられる', tai: 'みたい' },
-  hiku: { n: 'ひく', past: 'ひきました', te: 'ひいて', pot: 'ひける', tai: 'ひきたい' },
-  oyogu: { n: 'およぐ', past: 'およぎました', te: 'およいで', pot: 'およげる', tai: 'およぎたい' },
+  suru: { n: 'する', past: 'しました', te: 'して', pot: 'できる', tai: 'したい', kata: 'しかた' },
+  utau: { n: 'うたう', past: 'うたいました', te: 'うたって', pot: 'うたえる', tai: 'うたいたい', kata: 'うたいかた' },
+  odoru: { n: 'おどる', past: 'おどりました', te: 'おどって', pot: 'おどれる', tai: 'おどりたい', kata: 'おどりかた' },
+  ensou: { n: 'えんそうする', past: 'えんそうしました', te: 'えんそうして', pot: 'えんそうできる', tai: 'えんそうしたい', kata: 'えんそうのしかた' },
+  taberu: { n: 'たべる', past: 'たべました', te: 'たべて', pot: 'たべられる', tai: 'たべたい', kata: 'たべかた' },
+  kaku: { n: 'かく', past: 'かきました', te: 'かいて', pot: 'かける', tai: 'かきたい', kata: 'かきかた' },
+  yomu: { n: 'よむ', past: 'よみました', te: 'よんで', pot: 'よめる', tai: 'よみたい', kata: 'よみかた' },
+  tsukuru: { n: 'つくる', past: 'つくりました', te: 'つくって', pot: 'つくれる', tai: 'つくりたい', kata: 'つくりかた' },
+  oru: { n: 'おる', past: 'おりました', te: 'おって', pot: 'おれる', tai: 'おりたい', kata: 'おりかた' },
+  hashiru: { n: 'はしる', past: 'はしりました', te: 'はしって', pot: 'はしれる', tai: 'はしりたい', kata: 'はしりかた' },
+  asobu: { n: 'あそぶ', past: 'あそびました', te: 'あそんで', pot: 'あそべる', tai: 'あそびたい', kata: 'あそびかた' },
+  miru: { n: 'みる', past: 'みました', te: 'みて', pot: 'みられる', tai: 'みたい', kata: 'みかた' },
+  hiku: { n: 'ひく', past: 'ひきました', te: 'ひいて', pot: 'ひける', tai: 'ひきたい', kata: 'ひきかた' },
+  oyogu: { n: 'およぐ', past: 'およぎました', te: 'およいで', pot: 'およげる', tai: 'およぎたい', kata: 'およぎかた' },
 };
 function wordInfo(w) {
   const d = SLOTS.nani.w.find(x => x[0] === w);
@@ -56,7 +57,7 @@ const TPLS = [
   { id: 'deki', em: '⭐', name: 'できるようになったこと', parts: ['@nani', '#potp', '@how2', '#potv', 'ようになりました。'] },
   { id: 'omoi', em: '💭', name: 'おもったこと', parts: ['@nani', '#te', '、', '@feel2', 'とおもいました。'] },
   { id: 'hokoku', em: '📢', name: 'ほうこくする', parts: ['@aite', '、', '@itsu', '、', '@nani', 'を', '@how', '@gend'] },
-  { id: 'onegai', em: '🙏', name: 'おねがい', parts: ['@aite', '、', '@nani', 'を', '@help'] },
+  { id: 'onegai', em: '🙏', name: 'おねがい', parts: ['@aite', '、', '@nani', '', '@help'] },
   { id: 'tsugi', em: '🚀', name: 'つぎに がんばりたいこと', parts: ['つぎは、', '@nani', 'を', '@how', '@tend'] },
   { id: 'jiyu', em: '✍️', name: 'じゆうに かく', parts: [] },
 ];
@@ -76,7 +77,9 @@ function sentenceComplete() {
 const isStudent = () => DB.role === 'student';
 // null＝ぜんぶ だす、[…]＝えらんだ ものだけ。hide・pin は ひとごとに あたらしく つくる（ひとの あいだで まざらない）
 const MODE_IDS = ['glyph', 'font', 'hand'];
-const showDef = () => ({ tpls: null, modes: null, glyph: true, hide: {}, pin: {}, max: 0 });
+// practice：②うってみる を つかうか、stat：じかん・ミスの かずを みせるか（じどうせいと モード）
+const showDef = () => ({ tpls: null, modes: null, glyph: true, practice: true, stat: true, hide: {}, pin: {}, max: 0 });
+const practiceOn = () => !isStudent() || SH().practice !== false;
 function SH() {
   const s = S();
   if (!s.show) s.show = showDef();
@@ -169,7 +172,7 @@ function orderItems(key, items) {
 const DYN = {
   gend: [['#past', '〜ました（れい：うたいました）'], ['#gpast', 'がんばって〜ました'], ['#gamba', 'がんばりました。']],
   tend: [['#tai', '〜たいです（れい：うたいたいです）'], ['#gtai', 'がんばって〜たいです'], ['#gamba', 'がんばりたいです。']],
-  help: [['#issho', 'いっしょに〜してください。']],
+  help: [['#tetsu', '〜のを てつだってください。'], ['#oshie', '〜の しかたを おしえてください。'], ['#miru', '〜しているところを みてください。'], ['#issho', 'いっしょに〜してください。']],
 };
 function renderChooser(key, idx) {
   const ch = $('#chooser'); ch.innerHTML = '';
@@ -203,8 +206,16 @@ function renderChooser(key, idx) {
     }
   }
   if (key === 'help') {
-    const V = nw ? VERBS[wordInfo(nw).v] || VERBS.suru : VERBS.suru;
-    items.push({ id: '#issho', w: 'いっしょに' + V.te + 'ください。', em: '🤝' });
+    // れい（がっき）：がっきを えんそうするのを てつだって／がっきの えんそうのしかたを おしえて／がっきを えんそうしているところを みて
+    const vk = nw ? wordInfo(nw).v : 'suru', V = VERBS[vk] || VERBS.suru;
+    if (!nw) ch.append(el('div', { class: 'hint' }, 'さきに「なにを？」を えらぶと、あう ことばが でます。'));
+    items = [
+      { id: '#tetsu', w: (vk === 'suru' ? 'を' : 'を' + V.n + 'のを') + 'てつだってください。', em: '🙋' },
+      { id: '#oshie', w: 'の' + V.kata + 'をおしえてください。', em: '💡' },
+      { id: '#miru', w: 'を' + V.te + 'いるところをみてください。', em: '👀' },
+      { id: '#issho', w: 'をいっしょに' + V.te + 'ください。', em: '🤝' },
+    ];
+    items.forEach(x => { x.label = (nw || '〇〇') + x.w; });
   }
   const mine = (P().words[key] || []);
   items = orderItems(key, mine.map(w => ({ id: w, w, mine: true })).concat(items));
@@ -214,7 +225,7 @@ function renderChooser(key, idx) {
     if (SH().max > 0) items = items.slice(0, SH().max);
   }
   items.forEach(x => {
-    if (!x.mine) return box.append(el('button', { class: 'chip', onclick: () => pick(x.w) }, el('span', { class: 'em' }, x.em), x.w));
+    if (!x.mine) return box.append(el('button', { class: 'chip', onclick: () => pick(x.w) }, el('span', { class: 'em' }, x.em), x.label || x.w));
     box.append(el('button', { class: 'chip mine', onclick: () => pick(x.w) }, x.w));
     box.append(el('button', { class: 'btn small warn tonly', 'aria-label': x.w + ' を けす', onclick: () => { P().words[key] = mine.filter(y => y !== x.w); saveDB(); renderChooser(key, idx); } }, '✕'));
   });
@@ -318,11 +329,13 @@ function renderDoc() {
   const bad = [...new Set(p.doc.join('').split('').filter(c => !isTypable(c)))];
   $('#docWarn').textContent = bad.length ? '※ うてない もじが あります：' + bad.join(' ') + '（タイピングでは とばします）' : '';
   $('#goType').disabled = !p.doc.length;
+  $('#goType').textContent = practiceOn() ? 'つぎへ：うってみる ▶' : 'つぎへ：しあげる ▶';
 }
 // できた ぶんを よびだして、ことばを えらびなおす
 function editLine(i) {
   const s = P().doc[i], src = (P().docSrc || {})[stripConn(s)]; if (!src) return;
   mk = P().mk = { tpl: src.tpl, vals: Object.assign({}, src.vals), active: null, free: '', editIdx: i };
+  if (src.tpl === 'onegai' && mk.vals[4] && !/^[をの]/.test(mk.vals[4])) delete mk.vals[4];
   renderMake(); window.scrollTo(0, 0);
   speak(s); toast('なおしたい ことばを タップしてね');
 }
@@ -355,5 +368,5 @@ $('#btnClearDoc').addEventListener('click', function () {
   setDoc([], 'keep'); delete mk.editIdx; saveDB(); renderDoc(); this.dataset.c = ''; this.textContent = 'ぜんぶ けす';
 });
 $('#btnSpeakAll').addEventListener('click', () => speak(P().doc.join('')));
-$('#goType').addEventListener('click', () => show('type'));
+$('#goType').addEventListener('click', () => show(practiceOn() ? 'type' : 'finish'));
 
