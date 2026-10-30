@@ -184,6 +184,7 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
 .showgrp{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin:6px 0 10px;font-size:16px}
 .showgrp b{min-width:9em}
 .wtog{min-height:40px;padding:4px 12px;border-radius:20px;border:2px solid var(--accent);background:var(--accent-soft);font-size:16px}
+.wtog.pin{border-color:#e0a800;background:#fff3c4}
 .wtog.off{border-color:var(--line);background:#fff;color:#9aa;text-decoration:line-through}
 label.btn{display:inline-flex;align-items:center;cursor:pointer}
 .photos{display:flex;gap:10px;flex-wrap:wrap}
@@ -346,6 +347,7 @@ label.btn{display:inline-flex;align-items:center;cursor:pointer}
         </div>
       </div>
       <div class="missing" id="missingInfo"></div>
+      <div class="row tonly" id="snapRow" hidden><span class="hint">📌 ほぞんした ときの もじ・なまえで だしています。</span><button class="btn small" id="btnSnapOff">いまの もじ・なまえに する</button></div>
       <div class="row" style="margin-top:10px">
         <button class="btn main" id="btnSaveWork">💾 ほぞんする</button>
         <button class="btn tonly" id="btnImage">📤 パソコンへ おくる（PDF・がぞう）</button>
@@ -411,8 +413,13 @@ label.btn{display:inline-flex;align-items:center;cursor:pointer}
           <select id="optCase"><option value="lower">こもじ（a b c）</option><option value="upper">おおもじ（A B C）</option></select></div>
       </div>
       <div class="card">
+        <div class="warnbox" id="brokenBox" hidden style="margin-bottom:10px">
+          <p>⚠ まえに ほぞんした データが こわれていて よみこめませんでした。けさずに とってあります。ファイルに とりだして、がっこうの ほぞん ばしょに のこしてください。</p>
+          <div class="row"><button class="btn small" id="btnBrokenSave">📥 こわれた データを ファイルに とりだす</button><button class="btn small warn" id="btnBrokenDrop">とりだしたので けす</button></div>
+        </div>
         <h2>バックアップ（ひっこし）</h2>
-        <p class="hint">とうろくした もじなどを コードに して コピーできます。べつの iPad で「よみこむ」に はりつけると つかえます。</p>
+        <p class="hint">とうろくした もじ・ことば・ぶんしょう・さくひん・しゃしん・せっていを コードに して コピーできます。べつの iPad で「よみこむ」に はりつけると つかえます。<b>ふつうは いま えらんでいる 1にんぶん</b>です。</p>
+        <label class="hint" style="display:flex;gap:8px;align-items:center;font-size:16px"><input type="checkbox" id="optExportAll" style="width:22px;height:22px"> ぜんいんぶんを 1つの コードに する（がっこうの ほぞん ばしょに のこす とき）</label>
         <div class="row">
           <button class="btn small" id="btnExport">コードを つくる</button>
           <button class="btn small" id="btnCopyExport">コピー</button>
@@ -464,24 +471,37 @@ const S = () => P().settings || (P().settings = Object.assign({}, DEF_SET));
 function newProfile(name) {
   return { id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name, glyphs: {}, words: {}, doc: [], works: [] };
 }
+// よみこめない データは けさずに BROKEN_KEY へ うつす。うつせない ときは、うわがき しないよう ほぞんを とめる
+const BROKEN_KEY = STORE_KEY + '.broken';
+let BROKEN = null, saveBlocked = false;
 function loadDB() {
-  try { DB = JSON.parse(localStorage.getItem(STORE_KEY)); } catch (e) { DB = null; }
-  if (!DB || !Array.isArray(DB.profiles) || !DB.profiles.length) {
-    const p = newProfile('ためしのひと');
-    DB = { profiles: [p], current: p.id, settings: {} };
-  }
-  // せっていは ひと（じどうせいと）ごとに もつ。まえの ぜんたい せっていは はじめの あたいに つかう
-  DB.profiles.forEach(p => { p.settings = Object.assign({}, DEF_SET, DB.settings || {}, p.settings); });
+  let raw = null;
+  try { raw = localStorage.getItem(STORE_KEY); } catch (e) { raw = null; }
+  try { DB = JSON.parse(raw); } catch (e) { DB = null; }
+  const ok = DB && typeof DB === 'object' && Array.isArray(DB.profiles);
+  if (raw && !ok) {
+    BROKEN = raw;
+    try { localStorage.setItem(BROKEN_KEY, raw); } catch (e) { saveBlocked = true; }
+  } else { try { BROKEN = localStorage.getItem(BROKEN_KEY); } catch (e) { BROKEN = null; } }
+  if (!ok) DB = { profiles: [] };
+  // ほぞん して あった データも おなじ きまりで しらべる（せっていは ひとごと。まえの ぜんたい せっていは はじめの あたい）
+  DB.profiles = DB.profiles.map(p => p && typeof p === 'object' ? cleanProfile(Object.assign({}, p, { settings: Object.assign({}, DB.settings || {}, p.settings) })) : null).filter(Boolean);
+  if (!DB.profiles.length) { const p = newProfile('ためしのひと'); p.settings = cleanSettings({}); DB.profiles = [p]; }
+  if (!DB.profiles.some(p => p.id === DB.current)) DB.current = DB.profiles[0].id;
+  DB.role = DB.role === 'student' ? 'student' : 'teacher';
 }
 // ほぞんに しっぱい したら、きえない おしらせを だす（つぎに せいこう するまで）
 function saveBanner(on) {
   let b = document.getElementById('saveErr');
   if (!on) { if (b) b.remove(); return; }
   if (b) return;
-  b = el('div', { id: 'saveErr', class: 'saveerr', role: 'alert' }, '⚠ ほぞんできませんでした。iPad の ようりょうが いっぱいかも しれません。ほぞんした さくひんを PDF に して おくり、いらない さくひんを けしてから、もういちど ためしてください。');
+  b = el('div', { id: 'saveErr', class: 'saveerr', role: 'alert' }, saveBlocked
+    ? '⚠ まえの データが こわれていて、まもる ために ほぞんを とめています。「せってい」の「こわれた データを ファイルに とりだす」を してください。'
+    : '⚠ ほぞんできませんでした。iPad の ようりょうが いっぱいかも しれません。「せってい → バックアップ」で コードを ファイルに とりだし、いらない さくひんや しゃしんを けしてから、もういちど ためしてください。');
   document.body.append(b);
 }
 function saveDB() {
+  if (saveBlocked) { saveBanner(true); return false; }
   try { localStorage.setItem(STORE_KEY, JSON.stringify(DB)); saveBanner(false); return true; }
   catch (e) { saveBanner(true); return false; }
 }
@@ -629,9 +649,16 @@ function sentenceComplete() {
 }
 // じどうせいと モードの ときだけ、せんせいが えらんだ ものに しぼる
 const isStudent = () => DB.role === 'student';
-const SHOW_DEF = { tpls: null, modes: null, glyph: true, hide: {}, max: 0 };
-const SH = () => S().show = Object.assign({}, SHOW_DEF, S().show);
-function shownTpls() { const l = SH().tpls; return isStudent() && l && l.length ? TPLS.filter(t => l.includes(t.id)) : TPLS; }
+// null＝ぜんぶ だす、[…]＝えらんだ ものだけ。hide・pin は ひとごとに あたらしく つくる（ひとの あいだで まざらない）
+const MODE_IDS = ['glyph', 'font', 'hand'];
+const showDef = () => ({ tpls: null, modes: null, glyph: true, hide: {}, pin: {}, max: 0 });
+function SH() {
+  const s = S();
+  if (!s.show) s.show = showDef();
+  const d = showDef(); Object.keys(d).forEach(k => { if (s.show[k] === undefined) s.show[k] = d[k]; });
+  return s.show;
+}
+function shownTpls() { const l = SH().tpls; return isStudent() && Array.isArray(l) ? TPLS.filter(t => l.includes(t.id)) : TPLS; }
 // かつどうの しゃしん：ぶんを つくる ときの てがかり（せんせいが いれる）
 const PHOTO_MAX = 6, PHOTO_PX = 480;
 function renderPhotos() {
@@ -708,6 +735,17 @@ function renderFrame() {
   }
   renderPreview();
 }
+// せんせいが「さきに だす」に した ことば → せんせいが ふやした ことば → もとの ことば の じゅん
+function orderItems(key, items) {
+  const pin = SH().pin[key] || [];
+  return items.filter(x => pin.includes(x.id)).sort((a, z) => pin.indexOf(a.id) - pin.indexOf(z.id)).concat(items.filter(x => !pin.includes(x.id)));
+}
+// うごきで かわる ぶんまつの なまえ（せっていで つかう）
+const DYN = {
+  gend: [['#past', '〜ました（れい：うたいました）'], ['#gpast', 'がんばって〜ました'], ['#gamba', 'がんばりました。']],
+  tend: [['#tai', '〜たいです（れい：うたいたいです）'], ['#gtai', 'がんばって〜たいです'], ['#gamba', 'がんばりたいです。']],
+  help: [['#issho', 'いっしょに〜してください。']],
+};
 function renderChooser(key, idx) {
   const ch = $('#chooser'); ch.innerHTML = '';
   const slot = SLOTS[key];
@@ -725,35 +763,35 @@ function renderChooser(key, idx) {
     // ぜんぶ えらべたら ぶんを よみあげて、よみかえしを うながす
     if (next < 0 && S().speakPick) speak(sentenceText(), true);
   };
-  let words = slot.w;
+  // ことばの こうほ：{ id, w: もじ, em, mine }。うごきで かわる ぶんまつは「#〜」の きまった id で せっていする
+  let items = slot.w.map(([w, em]) => ({ id: w, w, em }));
+  const t0 = TPLS.find(t => t.id === mk.tpl), nw = mk.vals[t0.parts.indexOf('@nani')];
   if (key === 'gend' || key === 'tend') {
-    const t = TPLS.find(t => t.id === mk.tpl), nw = mk.vals[t.parts.indexOf('@nani')];
     const vk = nw ? wordInfo(nw).v : null, V = VERBS[vk] || null;
-    words = [];
+    items = [];
     if (V) {
-      if (key === 'gend') { words.push([V.past + '。', '✅']); if (vk !== 'suru') words.push(['がんばって' + V.past + '。', '💪']); words.push(['がんばりました。', '💪']); }
-      else { words.push([V.tai + 'です。', '✨']); if (vk !== 'suru') words.push(['がんばって' + V.tai + 'です。', '💪']); words.push(['がんばりたいです。', '💪']); }
+      if (key === 'gend') { items.push({ id: '#past', w: V.past + '。', em: '✅' }); if (vk !== 'suru') items.push({ id: '#gpast', w: 'がんばって' + V.past + '。', em: '💪' }); items.push({ id: '#gamba', w: 'がんばりました。', em: '💪' }); }
+      else { items.push({ id: '#tai', w: V.tai + 'です。', em: '✨' }); if (vk !== 'suru') items.push({ id: '#gtai', w: 'がんばって' + V.tai + 'です。', em: '💪' }); items.push({ id: '#gamba', w: 'がんばりたいです。', em: '💪' }); }
     } else {
       ch.append(el('div', { class: 'hint' }, 'さきに「なにを？」を えらぶと、あう ことばが でます。'));
-      words = key === 'gend' ? [['がんばりました。', '💪']] : [['がんばりたいです。', '💪']];
+      items = [{ id: '#gamba', w: key === 'gend' ? 'がんばりました。' : 'がんばりたいです。', em: '💪' }];
     }
   }
   if (key === 'help') {
-    const t = TPLS.find(t => t.id === mk.tpl), nw = mk.vals[t.parts.indexOf('@nani')];
     const V = nw ? VERBS[wordInfo(nw).v] || VERBS.suru : VERBS.suru;
-    words = words.concat([['いっしょに' + V.te + 'ください。', '🤝']]);
+    items.push({ id: '#issho', w: 'いっしょに' + V.te + 'ください。', em: '🤝' });
   }
-  let mineW = (P().words[key] || []);
+  const mine = (P().words[key] || []);
+  items = orderItems(key, mine.map(w => ({ id: w, w, mine: true })).concat(items));
   if (isStudent()) {
     const hide = SH().hide[key] || [];
-    words = words.filter(([w]) => !hide.includes(w)); mineW = mineW.filter(w => !hide.includes(w));
-    if (SH().max > 0) { words = words.slice(0, SH().max); mineW = mineW.slice(0, Math.max(0, SH().max - words.length)); }
+    items = items.filter(x => !hide.includes(x.id));
+    if (SH().max > 0) items = items.slice(0, SH().max);
   }
-  words.forEach(([w, em]) => box.append(el('button', { class: 'chip', onclick: () => pick(w) }, el('span', { class: 'em' }, em), w)));
-  const mine = (P().words[key] || []);
-  mineW.forEach(w => {
-    box.append(el('button', { class: 'chip mine', onclick: () => pick(w) }, w));
-    box.append(el('button', { class: 'btn small warn tonly', 'aria-label': w + ' を けす', onclick: () => { P().words[key] = mine.filter(x => x !== w); saveDB(); renderChooser(key, idx); } }, '✕'));
+  items.forEach(x => {
+    if (!x.mine) return box.append(el('button', { class: 'chip', onclick: () => pick(x.w) }, el('span', { class: 'em' }, x.em), x.w));
+    box.append(el('button', { class: 'chip mine', onclick: () => pick(x.w) }, x.w));
+    box.append(el('button', { class: 'btn small warn tonly', 'aria-label': x.w + ' を けす', onclick: () => { P().words[key] = mine.filter(y => y !== x.w); saveDB(); renderChooser(key, idx); } }, '✕'));
   });
   ch.append(box);
   const inp = el('input', { type: 'text', placeholder: 'あたらしい ことば', 'aria-label': 'あたらしい ことば', style: 'padding:10px;border-radius:10px;border:2px solid var(--line);flex:1;min-width:0' });
@@ -1468,7 +1506,7 @@ function renderSheet(cv, o, text, opt = {}) {
     else { missing.add(ch); fontPaint('"Klee One",serif', '#c0c8c8')(c, ch, x, y); }
   };
   const hand = opt.hand && !Array.isArray(opt.hand) ? opt.hand : {};
-  const bodyPaint = o.mode === 'glyph' ? glyphPaint : o.mode === 'font' ? fontPaint(FONTS[o.font][1], '#1b1b1b') : null;
+  const bodyPaint = o.mode === 'glyph' ? glyphPaint : o.mode === 'font' ? fontPaint((FONTS[o.font] || FONTS[0])[1], '#1b1b1b') : null;
   g.cells.forEach(({ r, c, ch, n }) => {
     const [x, y] = g.cellXY(r, c);
     if (opt.cur === n && n >= 0 && o.mode === 'hand' && !opt.exporting) { ctx.fillStyle = 'rgba(255,210,63,.45)'; ctx.fillRect(x + 1, y + 1, CELL - 2, CELL - 2); }
@@ -1488,7 +1526,7 @@ function renderSheet(cv, o, text, opt = {}) {
 }
 // ぜんぶの ページを がぞうに する
 async function renderPages(o, text, hand, scale) {
-  if (o.mode === 'font') await ensureFont(FONTS[o.font][1]); else await ensureFont('"Klee One"');
+  if (o.mode === 'font') await ensureFont((FONTS[o.font] || FONTS[0])[1]); else await ensureFont('"Klee One"');
   const n = sheetGeom(o, text).pages, out = [];
   for (let p = 0; p < n; p++) { const cv = document.createElement('canvas'); renderSheet(cv, o, text, { hand, exporting: true, page: p, scale }); out.push(cv); }
   return out;
@@ -1502,10 +1540,10 @@ let sheetGeomNow = null, sheetXf = null;
 async function drawFinish() {
   saveDB();
   const cv = $('#sheet');
-  if (fin.mode === 'font') await ensureFont(FONTS[fin.font][1]);
+  if (fin.mode === 'font') await ensureFont((FONTS[fin.font] || FONTS[0])[1]);
   else await ensureFont('"Klee One"');
   const pp = PAPERS[fin.paper] && PAPERS[fin.paper].w;
-  const res = renderSheet(cv, fin, finText(), { hand: handChars(), cur: fin.hi, page: fin.page, brMode, scale: pp ? 2 : 2 });
+  const res = renderSheet(cv, finO(), finText(), { hand: handChars(), cur: fin.hi, page: fin.page, brMode, scale: pp ? 2 : 2 });
   sheetGeomNow = res.geom; sheetXf = res.xf;
   fin.page = res.geom.page;
   const wrapW = $('.sheetwrap').clientWidth - 24;
@@ -1519,9 +1557,16 @@ async function drawFinish() {
   if (fin.mode === 'glyph' && res.missing.size) msgs.push('まだ とうろくしていない もじ（うすく でています）：' + [...res.missing].join(' ') + '　→「もじとうろく」で かこう');
   if (res.geom.pages > 1) msgs.push(`ぎょうすうに おさまらないので ${res.geom.pages}ページに なります（PDF では ぜんぶの ページが はいります）。`);
   mi.textContent = msgs.join('　');
+  $('#snapRow').hidden = !finSnap();
+}
+// ひらいた さくひんの「ほぞんした ときの もじ・なまえ」。ぶんしょうが かわったら（あたらしい さくひん）つかわない
+function finSnap() { const s = fin.snap; if (s && s.text !== finText()) delete fin.snap; return fin.snap || null; }
+function finO() {
+  const s = finSnap(); if (!s) return fin;
+  return Object.assign({}, fin, { nameText: s.nameText, glyphs: s.glyphs ? Object.assign({}, P().glyphs, s.glyphs) : undefined });
 }
 function renderFinish() {
-  const modesOk = isStudent() && SH().modes && SH().modes.length ? SH().modes : ['glyph', 'font', 'hand'];
+  const modesOk = isStudent() && Array.isArray(SH().modes) && SH().modes.length ? SH().modes : MODE_IDS;
   if (!modesOk.includes(fin.mode)) fin.mode = modesOk[0];
   $$('.mode').forEach(b => { b.hidden = !modesOk.includes(b.dataset.m); b.classList.toggle('on', b.dataset.m === fin.mode); });
   $('#handTools').hidden = fin.mode !== 'hand';
@@ -1565,7 +1610,7 @@ $('#btnPgNext').addEventListener('click', () => { fin.page++; drawFinish(); });
 // てがき：1もじずつ かく パッド
 const PADN = 300;
 let padStrokes = [];
-const handCells = () => sheetGeom(fin, finText()).allCells;
+const handCells = () => sheetGeom(finO(), finText()).allCells;
 // わくを がめんに あわせて できるだけ おおきく する（ねばりを なくすため こまかい がそで）
 function fitBigCanvas(cv, reserve) {
   const size = Math.max(200, Math.floor(Math.min(window.innerWidth - 36, window.innerHeight - reserve - 30)));
@@ -1742,23 +1787,25 @@ function openSendModal(cvs, base) {
 }
 $('#btnImage').addEventListener('click', async () => {
   if (!finText()) return toast('①で ぶんを つくってね');
-  openSendModal(await renderPages(fin, finText(), handChars()), fileBase());
+  openSendModal(await renderPages(finO(), finText(), handChars()), fileBase());
 });
 $('#btnPrint').addEventListener('click', async () => {
   if (!finText()) return toast('①で ぶんを つくってね');
-  const cvs = await renderPages(fin, finText(), handChars());
+  const cvs = await renderPages(finO(), finText(), handChars());
   const pa = $('#printArea'); pa.innerHTML = '';
   cvs.forEach(cv => pa.append(el('img', { src: cv.toDataURL('image/png'), alt: '', style: 'page-break-after:always' })));
   setTimeout(() => window.print(), 300);
 });
 $('#btnSaveWork').addEventListener('click', () => {
   if (!finText()) return toast('①で ぶんを つくってね');
-  const w = Object.assign({ id: 'w' + Date.now(), date: new Date().toISOString(), text: finText() }, JSON.parse(JSON.stringify(fin)));
-  w.nameText = P().name;
+  // ほぞんした ときの もじ・なまえを さくひんに いれておく（あとで かえても さくひんは かわらない）
+  const o = finO(), w = Object.assign({ id: 'w' + Date.now(), date: new Date().toISOString(), text: finText(), conn: !!P().conn }, clone(fin));
+  delete w.snap;
+  w.nameText = o.nameText || P().name;
   if (fin.mode === 'glyph') {
-    const used = new Set([...w.text, ...(fin.title || ''), ...P().name]), g = {};
-    used.forEach(c => { if (P().glyphs[c]) g[c] = P().glyphs[c]; });
-    w.glyphs = JSON.parse(JSON.stringify(g));
+    const src = o.glyphs || P().glyphs, used = new Set([...w.text, ...(fin.title || ''), ...w.nameText]), g = {};
+    used.forEach(c => { if (src[c]) g[c] = src[c]; });
+    w.glyphs = clone(g);
   }
   if (fin.mode === 'hand') w.hand = JSON.parse(JSON.stringify(handChars()));
   P().works.unshift(w);
@@ -1800,26 +1847,42 @@ function renderWorks() {
         el('button', { class: 'btn small', onclick: () => openWork(w) }, 'ひらく'), del)));
   });
 }
+// いまの さぎょう（ぶんしょう・てがき・しあげ・つくりかた・くぎり・じゅんじょの ことば）を まとめて とる／もどす
+const WORK_KEYS = ['docSrc', 'conn', 'cuts', 'cutsText'];
+function takeState() {
+  const p = P(), st = { date: new Date().toISOString(), doc: p.doc.slice(), hand: clone(handChars()), fin: clone(fin) };
+  WORK_KEYS.forEach(k => { if (p[k] !== undefined) st[k] = clone(p[k]); });
+  return st;
+}
+function putState(st) {
+  const p = P();
+  p.doc = st.doc.slice(); p.hand = clone(st.hand || {});
+  WORK_KEYS.forEach(k => { if (st[k] !== undefined) p[k] = clone(st[k]); else delete p[k]; });
+  fin = p.fin = Object.assign({}, FIN_DEF, clone(st.fin)); fin.hi = 0; fin.page = 0;
+  if (mk.editIdx != null) delete mk.editIdx;
+}
 function openWork(w) {
   // ひらく まえに、いまの ないようを したがきに のこす（あとで もどせる）
-  if (P().doc.length || Object.keys(handChars()).length) {
-    P().draft = { date: new Date().toISOString(), doc: P().doc.slice(), hand: JSON.parse(JSON.stringify(handChars())), fin: JSON.parse(JSON.stringify(fin)) };
-  }
-  P().doc = w.text.split('\n');
-  Object.keys(FIN_DEF).forEach(k => { if (w[k] !== undefined && k !== 'hi') fin[k] = JSON.parse(JSON.stringify(w[k])); });
-  fin.page = 0;
-  P().hand = w.hand && !Array.isArray(w.hand) ? JSON.parse(JSON.stringify(w.hand)) : {}; fin.hi = 0;
-  renderFinish(); window.scrollTo(0, 0); if (saveDB()) toast(P().draft ? 'ひらきました（まえの ないようは したがきに のこしました）' : 'ひらきました');
+  const before = takeState(), oldDraft = P().draft;
+  if (P().doc.length || Object.keys(handChars()).length) P().draft = before;
+  P().doc = w.text.split('\n'); P().conn = !!w.conn;
+  Object.keys(FIN_DEF).forEach(k => { if (w[k] !== undefined && k !== 'hi') fin[k] = clone(w[k]); });
+  fin.page = 0; fin.hi = 0;
+  // ほぞんした ときの もじ・なまえで ひらく（ぶんしょうを かえるまで）
+  fin.snap = { id: w.id, text: w.text, nameText: w.nameText || P().name, glyphs: w.glyphs ? clone(w.glyphs) : null };
+  P().hand = w.hand && !Array.isArray(w.hand) ? clone(w.hand) : {};
+  if (!saveDB()) { putState(before); if (oldDraft) P().draft = oldDraft; else delete P().draft; renderFinish(); return toast('ほぞんする ばしょが たりず、ひらけませんでした'); }
+  renderFinish(); window.scrollTo(0, 0); toast(P().draft === before ? 'ひらきました（まえの ないようは したがきに のこしました）' : 'ひらきました');
 }
 function restoreDraft() {
   const d = P().draft; if (!d) return;
   // いまの ないようと いれかえる（もういちど おすと もとに もどる）
-  const now = { date: new Date().toISOString(), doc: P().doc.slice(), hand: JSON.parse(JSON.stringify(handChars())), fin: JSON.parse(JSON.stringify(fin)) };
-  P().doc = d.doc; P().hand = d.hand;
-  Object.keys(FIN_DEF).forEach(k => { if (d.fin[k] !== undefined) fin[k] = d.fin[k]; });
-  fin.page = 0; fin.hi = 0; P().draft = now;
-  renderFinish(); if (saveDB()) toast('したがきに もどしました');
+  const now = takeState();
+  putState(d); P().draft = now;
+  if (!saveDB()) { putState(now); P().draft = d; renderFinish(); return toast('ほぞんする ばしょが たりず、もどせませんでした'); }
+  renderFinish(); toast('したがきに もどしました');
 }
+$('#btnSnapOff').addEventListener('click', () => { delete fin.snap; saveDB(); renderFinish(); });
 $('#btnDraft').addEventListener('click', restoreDraft);
 
 // ===== もじとうろく =====
@@ -1920,25 +1983,37 @@ function openReg(ch, queue) {
 function renderShowBox() {
   const sh = SH(), box = $('#showBox'); box.innerHTML = '';
   const grp = (label, ...kids) => el('div', { class: 'showgrp' }, el('b', {}, label), ...kids);
-  const cb = (on, text, fn) => { const i = el('input', { type: 'checkbox' }); i.checked = on; i.addEventListener('change', () => { fn(i.checked); saveDB(); }); return el('label', {}, i, ' ' + text); };
-  const listToggle = (key, all, id, on) => { let l = sh[key] && sh[key].length ? sh[key].slice() : all.slice(); if (on) l.push(id); else l = l.filter(x => x !== id); sh[key] = l.length === all.length ? null : l; };
+  const cb = (on, text, fn) => { const i = el('input', { type: 'checkbox' }); i.checked = on; i.addEventListener('change', () => { if (fn(i.checked, i) !== false) saveDB(); }); return el('label', {}, i, ' ' + text); };
+  // null＝ぜんぶ。さいごの 1つは はずせない（なにも でない がめんに ならないように）
+  const listToggle = (key, all, id, on, i) => {
+    let l = Array.isArray(sh[key]) ? sh[key].slice() : all.slice();
+    if (on) l.push(id); else l = l.filter(x => x !== id);
+    if (!l.length) { i.checked = true; toast('1つは のこしてください（ぜんぶ はずすと えらべなく なります）'); return false; }
+    sh[key] = l.length === all.length ? null : all.filter(x => l.includes(x));
+  };
   const tIds = TPLS.map(t => t.id);
-  box.append(grp('ぶんの かた', ...TPLS.map(t => cb(!sh.tpls || sh.tpls.includes(t.id), t.em + t.name, on => listToggle('tpls', tIds, t.id, on)))));
-  const mIds = ['glyph', 'font', 'hand'], mName = { glyph: 'じぶんの もじ', font: 'iPadの もじ', hand: 'てがき' };
-  box.append(grp('しあげかた', ...mIds.map(m => cb(!sh.modes || sh.modes.includes(m), mName[m], on => listToggle('modes', mIds, m, on))), cb(sh.glyph, 'もじとうろくの ボタン', on => { sh.glyph = on; })));
+  box.append(grp('ぶんの かた', ...TPLS.map(t => cb(!sh.tpls || sh.tpls.includes(t.id), t.em + t.name, (on, i) => listToggle('tpls', tIds, t.id, on, i)))));
+  const mName = { glyph: 'じぶんの もじ', font: 'iPadの もじ', hand: 'てがき' };
+  box.append(grp('しあげかた', ...MODE_IDS.map(m => cb(!sh.modes || sh.modes.includes(m), mName[m], (on, i) => listToggle('modes', MODE_IDS, m, on, i))), cb(sh.glyph, 'もじとうろくの ボタン', on => { sh.glyph = on; })));
   const maxSel = el('select', { 'aria-label': 'ことばの かず' });
   [[0, 'ぜんぶ'], [2, '2こ'], [3, '3こ'], [4, '4こ'], [6, '6こ']].forEach(([v, t]) => maxSel.append(el('option', { value: v }, t)));
   maxSel.value = String(sh.max); maxSel.addEventListener('change', () => { sh.max = +maxSel.value; saveDB(); });
-  box.append(grp('ことばの かず', maxSel, el('span', { class: 'hint' }, '（1かいに だす ことばの かず。うえから じゅんに でます）')));
-  const det = el('details', {}, el('summary', { class: 'hint' }, 'だす ことばを えらぶ（タップで だす／かくす）'));
+  box.append(grp('ことばの かず', maxSel, el('span', { class: 'hint' }, '（1かいに だす ことばの かず。⭐ → せんせいが ふやした ことば → もとの ことば の じゅんに でます）')));
+  const det = el('details', {}, el('summary', { class: 'hint' }, 'だす ことばを えらぶ（タップする たびに　だす → ⭐さきに だす → かくす）'));
   Object.entries(SLOTS).forEach(([k, s]) => {
-    const all = s.w.map(x => x[0]).concat(P().words[k] || []);
+    // ぶんまつは うごきで かわるので、きまった なまえで えらぶ
+    const all = (DYN[k] || []).concat(s.w.map(x => [x[0], x[0]])).concat((P().words[k] || []).map(w => [w, w]));
     if (!all.length) return;
-    det.append(grp(s.q, ...all.map(w => {
-      const hide = () => sh.hide[k] || [];
-      const b = el('button', { class: 'wtog' + (hide().includes(w) ? ' off' : '') }, w);
-      b.addEventListener('click', () => { const h = hide(); sh.hide[k] = h.includes(w) ? h.filter(x => x !== w) : h.concat(w); b.classList.toggle('off'); saveDB(); });
-      return b;
+    det.append(grp(s.q, ...all.map(([id, label]) => {
+      const st = () => (sh.hide[k] || []).includes(id) ? 'off' : (sh.pin[k] || []).includes(id) ? 'pin' : '';
+      const b = el('button', { class: 'wtog' });
+      const paint = () => { const v = st(); b.className = 'wtog' + (v ? ' ' + v : ''); b.textContent = (v === 'pin' ? '⭐' : '') + label; };
+      b.addEventListener('click', () => {
+        const v = st(), hide = (sh.hide[k] || []).filter(x => x !== id), pin = (sh.pin[k] || []).filter(x => x !== id);
+        if (v === '') pin.push(id); else if (v === 'pin') hide.push(id);
+        sh.hide[k] = hide; sh.pin[k] = pin; paint(); saveDB();
+      });
+      paint(); return b;
     })));
   });
   box.append(det);
@@ -1951,6 +2026,7 @@ function renderSetting() {
   $('#optSpeakPick').checked = S().speakPick;
   $('#btnDownload').hidden = IN_FRAME;
   $('#btnUndoReplace').hidden = !DB.replacedBackup;
+  $('#brokenBox').hidden = !BROKEN;
 }
 $('#optRomaji').addEventListener('change', e => { S().romaji = e.target.value; saveDB(); });
 $('#optCase').addEventListener('change', e => { S().keyCase = e.target.value; saveDB(); });
@@ -1968,7 +2044,9 @@ $('#btnProfDel').addEventListener('click', function () {
   this.dataset.c = ''; this.textContent = 'このひとを けす';
   bindProfile(); saveDB(); renderWho(); renderSetting();
 });
-const exportCode = () => JSON.stringify({ app: 'bunsho-maker', v: 1, profile: P() });
+let exportAll = false;
+const exportCode = () => JSON.stringify(exportAll ? { app: 'bunsho-maker', v: SCHEMA_V, profiles: DB.profiles } : { app: 'bunsho-maker', v: SCHEMA_V, profile: P() });
+$('#optExportAll').addEventListener('change', e => { exportAll = e.target.checked; $('#exportBox').value = ''; });
 $('#btnExport').addEventListener('click', () => { $('#exportBox').value = exportCode(); toast('コードを つくりました'); });
 $('#btnCopyExport').addEventListener('click', () => {
   const box = $('#exportBox'); if (!box.value) box.value = exportCode();
@@ -1976,54 +2054,198 @@ $('#btnCopyExport').addEventListener('click', () => {
   try { navigator.clipboard.writeText(box.value).then(() => toast('コピーしました'), fallback); } catch (e) { fallback(); }
 });
 $('#btnDownload').addEventListener('click', () => {
-  const a = el('a', { href: URL.createObjectURL(new Blob([exportCode()], { type: 'application/json' })), download: `bunsho-${P().name}.json` });
+  const a = el('a', { href: URL.createObjectURL(new Blob([exportCode()], { type: 'application/json' })), download: exportAll ? 'bunsho-all.json' : `bunsho-${P().name}.json` });
   document.body.append(a); a.click(); a.remove();
 });
-// よみこむ データを しらべて、へんな ところを とりのぞく
-function cleanProfile(src) {
-  if (!src || typeof src !== 'object') return null;
-  const obj = v => v && typeof v === 'object' && !Array.isArray(v) ? v : {};
-  const arr = v => Array.isArray(v) ? v : [];
-  const isStroke = s => Array.isArray(s) && s.every(p => Array.isArray(p) && p.length === 2 && p.every(n => typeof n === 'number' && isFinite(n)));
-  const glyphs = {};
-  Object.entries(obj(src.glyphs)).forEach(([c, st]) => { if (typeof c === 'string' && c.length === 1 && Array.isArray(st) && st.every(isStroke)) glyphs[c] = st; });
-  const words = {};
-  Object.entries(obj(src.words)).forEach(([k, l]) => { if (SLOTS[k]) words[k] = arr(l).filter(w => typeof w === 'string').map(w => normText(w).slice(0, 30)); });
-  const p = newProfile(typeof src.name === 'string' && src.name.trim() ? src.name.trim().slice(0, 30) : 'よみこんだひと');
-  if (typeof src.id === 'string') p.id = src.id;
-  Object.assign(p, {
-    glyphs, words, wordVerb: obj(src.wordVerb),
-    doc: arr(src.doc).filter(s => typeof s === 'string'),
-    works: arr(src.works).filter(w => w && typeof w.text === 'string' && typeof w.mode === 'string'),
-    photos: arr(src.photos).filter(x => x && typeof x.d === 'string' && x.d.startsWith('data:image/jpeg;base64,')).slice(0, PHOTO_MAX).map(x => ({ d: x.d, date: typeof x.date === 'string' ? x.date : '' })),
-    hand: obj(src.hand), settings: Object.assign({}, DEF_SET, obj(src.settings)), fin: obj(src.fin), mk: obj(src.mk),
+// ===== データの かたち（スキーマ）と しらべかた =====
+// ひと（プロフィール）の ほぞん こうもく。ふやしたら ここと cleanProfile に たす
+// id, name, glyphs, words, wordVerb, doc, docSrc, conn, cuts, cutsText, works, photos, hand, settings(+show), fin(+snap), mk, draft
+const SCHEMA_V = 2;
+const IMPORT_MAX = 8 * 1024 * 1024; // よみこむ コードの おおきさの うえかぎり（もじすう）
+const LIM = { strokes: 80, pts: 3000, glyphs: 200, hand: 5000, doc: 300, line: 1000, works: 300, text: 20000, words: 200 };
+const obj = v => v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+const arr = v => Array.isArray(v) ? v : [];
+const str = (v, max, d = '') => typeof v === 'string' ? v.slice(0, max) : d;
+const num = (v, lo, hi, d) => typeof v === 'number' && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d;
+const int = (v, lo, hi, d) => Number.isInteger(v) && v >= lo && v <= hi ? v : d;
+const pick = (v, list, d) => list.includes(v) ? v : d;
+const bool = (v, d) => typeof v === 'boolean' ? v : d;
+const clone = v => JSON.parse(JSON.stringify(v));
+// せん：[[x,y],…] の あつまり（ざひょうは 0〜1 ふきん）。へんな ものは のぞく
+function cleanStrokes(v) {
+  return arr(v).slice(0, LIM.strokes).map(st => arr(st).slice(0, LIM.pts)
+    .filter(p => Array.isArray(p) && p.length === 2 && p.every(n => typeof n === 'number' && isFinite(n))).map(p => p.map(n => Math.min(2, Math.max(-1, n)))))
+    .filter(st => st.length);
+}
+function cleanGlyphs(v) {
+  const g = {};
+  Object.entries(obj(v)).slice(0, LIM.glyphs).forEach(([c, st]) => { if ([...c].length === 1) { const s = cleanStrokes(st); if (s.length) g[c] = s; } });
+  return g;
+}
+function cleanHand(v) {
+  const h = {};
+  Object.entries(obj(v)).slice(0, LIM.hand).forEach(([k, x]) => {
+    if (!/^\d+$/.test(k) || !x || typeof x.ch !== 'string' || [...x.ch].length !== 1) return;
+    const s = cleanStrokes(x.s); if (s.length) h[k] = { ch: x.ch, s };
   });
+  return h;
+}
+const intList = (v, max) => [...new Set(arr(v).filter(n => Number.isInteger(n) && n >= 0 && n <= max))].sort((a, z) => a - z);
+// しあげの せってい（さくひんにも つかう）。しらない あたいは はじめの あたいに もどす
+function cleanFin(v) {
+  const o = obj(v), d = FIN_DEF;
+  const f = {
+    hi: 0, page: 0,
+    mode: pick(o.mode, ['glyph', 'font', 'hand'], d.mode), dir: pick(o.dir, ['yoko', 'tate'], d.dir),
+    cols: int(o.cols, 1, 60, d.cols), rows: int(o.rows, 0, 60, d.rows),
+    grid: bool(o.grid, d.grid), name: bool(o.name, d.name), model: bool(o.model, d.model), penOnly: bool(o.penOnly, d.penOnly), sentBreak: bool(o.sentBreak, d.sentBreak),
+    font: int(o.font, 0, FONTS.length - 1, d.font), weight: num(o.weight, 0.02, 0.2, d.weight), size: num(o.size, 0.3, 1, d.size),
+    use: pick(o.use, Object.keys(USES), d.use), paper: pick(o.paper, Object.keys(PAPERS), d.paper), gstyle: pick(o.gstyle, Object.keys(GSTYLES), o.grid === false ? 'none' : d.gstyle),
+    title: str(o.title, 60), breaks: intList(o.breaks, LIM.text),
+  };
+  if (o.snap) f.snap = cleanSnap(o.snap);
+  if (!f.snap) delete f.snap;
+  return f;
+}
+// ひらいた さくひんの「その ときの もじ・なまえ」
+function cleanSnap(v) {
+  const o = obj(v); if (typeof o.text !== 'string') return null;
+  return { id: str(o.id, 40), text: str(o.text, LIM.text), nameText: str(o.nameText, 30), glyphs: o.glyphs ? cleanGlyphs(o.glyphs) : null };
+}
+function cleanWork(v) {
+  const o = obj(v); if (typeof o.text !== 'string' || !o.text) return null;
+  const w = Object.assign(cleanFin(o), { id: str(o.id, 40) || 'w' + Date.now() + Math.random().toString(36).slice(2, 5), date: str(o.date, 40), text: o.text.slice(0, LIM.text), nameText: str(o.nameText, 30), conn: bool(o.conn, false) });
+  delete w.snap;
+  if (o.glyphs) w.glyphs = cleanGlyphs(o.glyphs);
+  if (o.hand) w.hand = cleanHand(o.hand);
+  return w;
+}
+const tplIds = () => TPLS.map(t => t.id);
+function cleanVals(v) { const r = {}; Object.entries(obj(v)).forEach(([k, x]) => { if (/^\d+$/.test(k) && typeof x === 'string') r[k] = x.slice(0, 60); }); return r; }
+function cleanDocSrc(v) {
+  const r = {};
+  Object.entries(obj(v)).slice(0, LIM.doc * 3).forEach(([k, x]) => { if (x && tplIds().includes(x.tpl)) r[k.slice(0, LIM.line)] = { tpl: x.tpl, vals: cleanVals(x.vals) }; });
+  return r;
+}
+const cleanDoc = v => arr(v).filter(s => typeof s === 'string').slice(0, LIM.doc).map(s => s.slice(0, LIM.line));
+function cleanShow(v) {
+  const o = obj(v), sh = showDef();
+  const ids = (l, all) => l === null || l === undefined ? null : [...new Set(arr(l).filter(x => all.includes(x)))];
+  sh.tpls = ids(o.tpls, tplIds()); sh.modes = ids(o.modes, MODE_IDS);
+  sh.glyph = bool(o.glyph, true); sh.max = pick(o.max, [0, 2, 3, 4, 6], 0);
+  const wl = l => [...new Set(arr(l).filter(x => typeof x === 'string').map(x => x.slice(0, 60)))].slice(0, LIM.words);
+  Object.keys(SLOTS).forEach(k => { if (obj(o.hide)[k]) sh.hide[k] = wl(o.hide[k]); if (obj(o.pin)[k]) sh.pin[k] = wl(o.pin[k]); });
+  return sh;
+}
+function cleanSettings(v) {
+  const o = obj(v), d = DEF_SET;
+  return {
+    romaji: pick(o.romaji, ['kunrei', 'hepburn'], d.romaji), guide: pick(o.guide, [0, 1, 2], d.guide), finger: bool(o.finger, d.finger), sound: bool(o.sound, d.sound),
+    keyCase: pick(o.keyCase, ['lower', 'upper'], d.keyCase), glyphModel: bool(o.glyphModel, d.glyphModel), input: pick(o.input, ['kana', 'roma'], d.input),
+    showBig: bool(o.showBig, d.showBig), chunk: pick(o.chunk, ['auto', 'ten', 'sent', 'all'], d.chunk), speakPick: bool(o.speakPick, d.speakPick),
+    advance: pick(o.advance, ['auto09', 'auto2', 'manual'], d.advance), show: cleanShow(o.show),
+  };
+}
+function cleanMk(v) {
+  const o = obj(v), m = { tpl: pick(o.tpl, tplIds(), 'gamba'), vals: cleanVals(o.vals), active: null, free: str(o.free, LIM.line) };
+  return m;
+}
+// ぶんしょうの さぎょう じょうたい（したがき にも つかう）
+function cleanWorkState(o) {
+  return { doc: cleanDoc(o.doc), hand: cleanHand(o.hand), fin: cleanFin(o.fin), docSrc: cleanDocSrc(o.docSrc), conn: bool(o.conn, false), cuts: intList(o.cuts, LIM.text), cutsText: str(o.cutsText, LIM.text) };
+}
+// よみこむ データを しらべて、へんな ところを とりのぞく（ほぞん して ある データにも つかう）
+function cleanProfile(src) {
+  if (!src || typeof src !== 'object' || Array.isArray(src)) return null;
+  const words = {};
+  Object.entries(obj(src.words)).forEach(([k, l]) => { if (SLOTS[k]) words[k] = [...new Set(arr(l).filter(w => typeof w === 'string').map(w => normText(w).slice(0, 30)).filter(Boolean))].slice(0, LIM.words); });
+  const wordVerb = {};
+  Object.entries(obj(src.wordVerb)).forEach(([w, v]) => { if (VERBS[v]) wordVerb[w.slice(0, 30)] = v; });
+  const p = newProfile(typeof src.name === 'string' && src.name.trim() ? src.name.trim().slice(0, 30) : 'よみこんだひと');
+  if (typeof src.id === 'string' && /^[\w-]{1,40}$/.test(src.id)) p.id = src.id;
+  const ws = cleanWorkState(src);
+  Object.assign(p, ws, {
+    glyphs: cleanGlyphs(src.glyphs), words, wordVerb,
+    works: arr(src.works).slice(0, LIM.works).map(cleanWork).filter(Boolean),
+    photos: arr(src.photos).filter(x => x && typeof x.d === 'string' && x.d.startsWith('data:image/jpeg;base64,') && x.d.length < 400000).slice(0, PHOTO_MAX).map(x => ({ d: x.d, date: str(x.date, 40) })),
+    settings: cleanSettings(src.settings), mk: cleanMk(src.mk),
+  });
+  // ふるい かたち：てがきが はいれつ だった ころ
+  if (src.fin && src.fin.grid === false && !src.fin.gstyle) p.fin.gstyle = 'none';
+  if (src.draft && typeof src.draft === 'object') p.draft = Object.assign({ date: str(src.draft.date, 40) }, cleanWorkState(src.draft));
   return p;
 }
+// コードを しらべる：{ app, v, profile } か { app, v, profiles:[…] }（ぜんいんぶん）
+function parseCode(txt) {
+  if (txt.length > IMPORT_MAX) return { err: 'コードが おおきすぎます' };
+  let o; try { o = JSON.parse(txt); } catch (e) { return { err: 'コードが よみこめません' }; }
+  if (!o || o.app !== 'bunsho-maker') return { err: '文章メーカーの コードでは ありません' };
+  if (typeof o.v === 'number' && o.v > SCHEMA_V) return { err: 'あたらしい 文章メーカーで つくった コードです。アプリを さいしんに してください' };
+  const list = o.profiles ? arr(o.profiles) : o.profile ? [o.profile] : [];
+  const ps = list.map(cleanProfile).filter(Boolean);
+  if (!ps.length) return { err: 'コードの なかみが こわれています' };
+  return { ps };
+}
 function importText(txt) {
-  let o; try { o = JSON.parse(txt); } catch (e) { return toast('コードが よみこめません'); }
-  if (!o || o.app !== 'bunsho-maker' || !o.profile) return toast('文章メーカーの コードでは ありません');
-  const p = cleanProfile(o.profile);
-  if (!p) return toast('コードの なかみが こわれています');
-  const finish = msg => { DB.current = p.id; bindProfile(); if (saveDB()) toast(msg); renderWho(); renderSetting(); };
-  const i = DB.profiles.findIndex(x => x.id === p.id);
-  if (i < 0) { DB.profiles.push(p); return finish(p.name + ' を よみこみました'); }
+  const r = parseCode(txt);
+  if (r.err) return toast(r.err);
+  const ps = r.ps, dup = ps.filter(p => DB.profiles.some(x => x.id === p.id));
+  // ほぞん できた ときだけ きりかえる。できなければ まえの じょうたいに もどす
+  const commit = (apply, msg) => {
+    const before = { profiles: DB.profiles.slice(), current: DB.current, rb: DB.replacedBackup };
+    apply();
+    DB.current = ps[0].id;
+    if (!saveDB()) {
+      DB.profiles = before.profiles; DB.current = before.current; if (before.rb) DB.replacedBackup = before.rb; else delete DB.replacedBackup;
+      saveDB(); bindProfile(); renderWho(); renderSetting();
+      return toast('ほぞんする ばしょが たりず、よみこめませんでした（いまの データは そのままです）');
+    }
+    bindProfile(); toast(msg); renderWho(); renderSetting();
+  };
+  const addAll = asNew => () => ps.forEach(p => {
+    if (asNew && DB.profiles.some(x => x.id === p.id)) { p.id = newProfile('').id; p.name += '（よみこみ）'; }
+    DB.profiles.push(p);
+  });
+  const who = ps.length > 1 ? ps.length + 'にんぶん' : ps[0].name;
+  if (!dup.length) return commit(addAll(false), who + ' を よみこみました');
   // おなじ ひとの データが ある ときは、えらんでもらう
-  const old = DB.profiles[i];
-  const m = openModal(el('div', { class: 'regtitle' }, '「' + old.name + '」の データが もう あります'),
-    el('p', { class: 'hint' }, `いま：もじ ${Object.keys(old.glyphs || {}).length}こ・さくひん ${(old.works || []).length}こ　／　よみこむ：もじ ${Object.keys(p.glyphs).length}こ・さくひん ${p.works.length}こ`),
+  const old = DB.profiles.find(x => x.id === dup[0].id);
+  const info = ps.length > 1 ? `${ps.length}にんの うち、${dup.map(p => p.name).join('・')} の データが もう あります` :
+    `いま：もじ ${Object.keys(old.glyphs || {}).length}こ・さくひん ${(old.works || []).length}こ　／　よみこむ：もじ ${Object.keys(ps[0].glyphs).length}こ・さくひん ${ps[0].works.length}こ`;
+  const m = openModal(el('div', { class: 'regtitle' }, '「' + (ps.length > 1 ? dup.map(p => p.name).join('・') : old.name) + '」の データが もう あります'),
+    el('p', { class: 'hint' }, info),
     el('div', { class: 'row' },
-      el('button', { class: 'btn main', onclick: () => { m.remove(); p.id = newProfile('').id; p.name += '（よみこみ）'; DB.profiles.push(p); finish(p.name + ' として ついか しました'); } }, 'べつの ひととして ついか'),
-      el('button', { class: 'btn warn', onclick: () => { m.remove(); DB.replacedBackup = { date: new Date().toISOString(), profile: old }; DB.profiles[i] = p; finish('おきかえました（まえの データは「もとに もどす」で もどせます）'); } }, 'いまの データを おきかえる'),
+      el('button', { class: 'btn main', onclick: () => { m.remove(); commit(addAll(true), 'べつの ひととして ついか しました'); } }, 'べつの ひととして ついか'),
+      el('button', { class: 'btn warn', onclick: () => {
+        m.remove();
+        commit(() => {
+          const olds = dup.map(p => DB.profiles.find(x => x.id === p.id));
+          DB.replacedBackup = { date: new Date().toISOString(), profiles: olds };
+          ps.forEach(p => { const i = DB.profiles.findIndex(x => x.id === p.id); if (i >= 0) DB.profiles[i] = p; else DB.profiles.push(p); });
+        }, 'おきかえました（まえの データは「もとに もどす」で もどせます）');
+      } }, 'いまの データを おきかえる'),
       el('button', { class: 'btn', onclick: () => m.remove() }, 'やめる')));
 }
 // おきかえる まえの データに もどす
 $('#btnUndoReplace').addEventListener('click', () => {
   const bk = DB.replacedBackup; if (!bk) return toast('もどせる データは ありません');
-  const i = DB.profiles.findIndex(x => x.id === bk.profile.id);
-  if (i >= 0) DB.profiles[i] = bk.profile; else DB.profiles.push(bk.profile);
-  delete DB.replacedBackup; DB.current = bk.profile.id; bindProfile();
-  if (saveDB()) toast('まえの データに もどしました'); renderWho(); renderSetting();
+  const olds = (bk.profiles || (bk.profile ? [bk.profile] : [])).map(cleanProfile).filter(Boolean);
+  const before = DB.profiles.slice(), cur = DB.current;
+  olds.forEach(o => { const i = DB.profiles.findIndex(x => x.id === o.id); if (i >= 0) DB.profiles[i] = o; else DB.profiles.push(o); });
+  delete DB.replacedBackup; DB.current = olds[0] ? olds[0].id : cur;
+  if (!saveDB()) { DB.profiles = before; DB.current = cur; DB.replacedBackup = bk; saveDB(); return toast('ほぞん できず、もどせませんでした'); }
+  bindProfile(); toast('まえの データに もどしました'); renderWho(); renderSetting();
+});
+// こわれた データの とりだし・けす
+$('#btnBrokenSave').addEventListener('click', () => {
+  const a = el('a', { href: URL.createObjectURL(new Blob([BROKEN || ''], { type: 'application/json' })), download: 'bunsho-broken-' + new Date().toISOString().slice(0, 10) + '.json' });
+  document.body.append(a); a.click(); a.remove();
+});
+$('#btnBrokenDrop').addEventListener('click', function () {
+  if (this.dataset.c !== '1') { this.dataset.c = '1'; this.textContent = 'ほんとうに けす？（とりだした ファイルは のこります）'; setTimeout(() => { this.dataset.c = ''; this.textContent = 'とりだしたので けす'; }, 3000); return; }
+  try { localStorage.removeItem(BROKEN_KEY); } catch (e) {}
+  BROKEN = null; saveBlocked = false;
+  if (saveDB()) toast('けしました'); renderSetting();
 });
 $('#btnImport').addEventListener('click', () => importText($('#exportBox').value.trim()));
 $('#fileImport').addEventListener('change', e => { const f = e.target.files[0]; if (!f) return; f.text().then(importText); e.target.value = ''; });
@@ -2035,6 +2257,7 @@ $('#btnPrint').hidden = IN_FRAME;
 renderWho();
 applyRole();
 show('make');
+if (saveBlocked) saveBanner(true);
 </script>
 </body>
 </html>

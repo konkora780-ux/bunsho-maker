@@ -74,9 +74,16 @@ function sentenceComplete() {
 }
 // じどうせいと モードの ときだけ、せんせいが えらんだ ものに しぼる
 const isStudent = () => DB.role === 'student';
-const SHOW_DEF = { tpls: null, modes: null, glyph: true, hide: {}, max: 0 };
-const SH = () => S().show = Object.assign({}, SHOW_DEF, S().show);
-function shownTpls() { const l = SH().tpls; return isStudent() && l && l.length ? TPLS.filter(t => l.includes(t.id)) : TPLS; }
+// null＝ぜんぶ だす、[…]＝えらんだ ものだけ。hide・pin は ひとごとに あたらしく つくる（ひとの あいだで まざらない）
+const MODE_IDS = ['glyph', 'font', 'hand'];
+const showDef = () => ({ tpls: null, modes: null, glyph: true, hide: {}, pin: {}, max: 0 });
+function SH() {
+  const s = S();
+  if (!s.show) s.show = showDef();
+  const d = showDef(); Object.keys(d).forEach(k => { if (s.show[k] === undefined) s.show[k] = d[k]; });
+  return s.show;
+}
+function shownTpls() { const l = SH().tpls; return isStudent() && Array.isArray(l) ? TPLS.filter(t => l.includes(t.id)) : TPLS; }
 // かつどうの しゃしん：ぶんを つくる ときの てがかり（せんせいが いれる）
 const PHOTO_MAX = 6, PHOTO_PX = 480;
 function renderPhotos() {
@@ -153,6 +160,17 @@ function renderFrame() {
   }
   renderPreview();
 }
+// せんせいが「さきに だす」に した ことば → せんせいが ふやした ことば → もとの ことば の じゅん
+function orderItems(key, items) {
+  const pin = SH().pin[key] || [];
+  return items.filter(x => pin.includes(x.id)).sort((a, z) => pin.indexOf(a.id) - pin.indexOf(z.id)).concat(items.filter(x => !pin.includes(x.id)));
+}
+// うごきで かわる ぶんまつの なまえ（せっていで つかう）
+const DYN = {
+  gend: [['#past', '〜ました（れい：うたいました）'], ['#gpast', 'がんばって〜ました'], ['#gamba', 'がんばりました。']],
+  tend: [['#tai', '〜たいです（れい：うたいたいです）'], ['#gtai', 'がんばって〜たいです'], ['#gamba', 'がんばりたいです。']],
+  help: [['#issho', 'いっしょに〜してください。']],
+};
 function renderChooser(key, idx) {
   const ch = $('#chooser'); ch.innerHTML = '';
   const slot = SLOTS[key];
@@ -170,35 +188,35 @@ function renderChooser(key, idx) {
     // ぜんぶ えらべたら ぶんを よみあげて、よみかえしを うながす
     if (next < 0 && S().speakPick) speak(sentenceText(), true);
   };
-  let words = slot.w;
+  // ことばの こうほ：{ id, w: もじ, em, mine }。うごきで かわる ぶんまつは「#〜」の きまった id で せっていする
+  let items = slot.w.map(([w, em]) => ({ id: w, w, em }));
+  const t0 = TPLS.find(t => t.id === mk.tpl), nw = mk.vals[t0.parts.indexOf('@nani')];
   if (key === 'gend' || key === 'tend') {
-    const t = TPLS.find(t => t.id === mk.tpl), nw = mk.vals[t.parts.indexOf('@nani')];
     const vk = nw ? wordInfo(nw).v : null, V = VERBS[vk] || null;
-    words = [];
+    items = [];
     if (V) {
-      if (key === 'gend') { words.push([V.past + '。', '✅']); if (vk !== 'suru') words.push(['がんばって' + V.past + '。', '💪']); words.push(['がんばりました。', '💪']); }
-      else { words.push([V.tai + 'です。', '✨']); if (vk !== 'suru') words.push(['がんばって' + V.tai + 'です。', '💪']); words.push(['がんばりたいです。', '💪']); }
+      if (key === 'gend') { items.push({ id: '#past', w: V.past + '。', em: '✅' }); if (vk !== 'suru') items.push({ id: '#gpast', w: 'がんばって' + V.past + '。', em: '💪' }); items.push({ id: '#gamba', w: 'がんばりました。', em: '💪' }); }
+      else { items.push({ id: '#tai', w: V.tai + 'です。', em: '✨' }); if (vk !== 'suru') items.push({ id: '#gtai', w: 'がんばって' + V.tai + 'です。', em: '💪' }); items.push({ id: '#gamba', w: 'がんばりたいです。', em: '💪' }); }
     } else {
       ch.append(el('div', { class: 'hint' }, 'さきに「なにを？」を えらぶと、あう ことばが でます。'));
-      words = key === 'gend' ? [['がんばりました。', '💪']] : [['がんばりたいです。', '💪']];
+      items = [{ id: '#gamba', w: key === 'gend' ? 'がんばりました。' : 'がんばりたいです。', em: '💪' }];
     }
   }
   if (key === 'help') {
-    const t = TPLS.find(t => t.id === mk.tpl), nw = mk.vals[t.parts.indexOf('@nani')];
     const V = nw ? VERBS[wordInfo(nw).v] || VERBS.suru : VERBS.suru;
-    words = words.concat([['いっしょに' + V.te + 'ください。', '🤝']]);
+    items.push({ id: '#issho', w: 'いっしょに' + V.te + 'ください。', em: '🤝' });
   }
-  let mineW = (P().words[key] || []);
+  const mine = (P().words[key] || []);
+  items = orderItems(key, mine.map(w => ({ id: w, w, mine: true })).concat(items));
   if (isStudent()) {
     const hide = SH().hide[key] || [];
-    words = words.filter(([w]) => !hide.includes(w)); mineW = mineW.filter(w => !hide.includes(w));
-    if (SH().max > 0) { words = words.slice(0, SH().max); mineW = mineW.slice(0, Math.max(0, SH().max - words.length)); }
+    items = items.filter(x => !hide.includes(x.id));
+    if (SH().max > 0) items = items.slice(0, SH().max);
   }
-  words.forEach(([w, em]) => box.append(el('button', { class: 'chip', onclick: () => pick(w) }, el('span', { class: 'em' }, em), w)));
-  const mine = (P().words[key] || []);
-  mineW.forEach(w => {
-    box.append(el('button', { class: 'chip mine', onclick: () => pick(w) }, w));
-    box.append(el('button', { class: 'btn small warn tonly', 'aria-label': w + ' を けす', onclick: () => { P().words[key] = mine.filter(x => x !== w); saveDB(); renderChooser(key, idx); } }, '✕'));
+  items.forEach(x => {
+    if (!x.mine) return box.append(el('button', { class: 'chip', onclick: () => pick(x.w) }, el('span', { class: 'em' }, x.em), x.w));
+    box.append(el('button', { class: 'chip mine', onclick: () => pick(x.w) }, x.w));
+    box.append(el('button', { class: 'btn small warn tonly', 'aria-label': x.w + ' を けす', onclick: () => { P().words[key] = mine.filter(y => y !== x.w); saveDB(); renderChooser(key, idx); } }, '✕'));
   });
   ch.append(box);
   const inp = el('input', { type: 'text', placeholder: 'あたらしい ことば', 'aria-label': 'あたらしい ことば', style: 'padding:10px;border-radius:10px;border:2px solid var(--line);flex:1;min-width:0' });

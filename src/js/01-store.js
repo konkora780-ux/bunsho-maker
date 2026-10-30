@@ -29,24 +29,37 @@ const S = () => P().settings || (P().settings = Object.assign({}, DEF_SET));
 function newProfile(name) {
   return { id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name, glyphs: {}, words: {}, doc: [], works: [] };
 }
+// よみこめない データは けさずに BROKEN_KEY へ うつす。うつせない ときは、うわがき しないよう ほぞんを とめる
+const BROKEN_KEY = STORE_KEY + '.broken';
+let BROKEN = null, saveBlocked = false;
 function loadDB() {
-  try { DB = JSON.parse(localStorage.getItem(STORE_KEY)); } catch (e) { DB = null; }
-  if (!DB || !Array.isArray(DB.profiles) || !DB.profiles.length) {
-    const p = newProfile('ためしのひと');
-    DB = { profiles: [p], current: p.id, settings: {} };
-  }
-  // せっていは ひと（じどうせいと）ごとに もつ。まえの ぜんたい せっていは はじめの あたいに つかう
-  DB.profiles.forEach(p => { p.settings = Object.assign({}, DEF_SET, DB.settings || {}, p.settings); });
+  let raw = null;
+  try { raw = localStorage.getItem(STORE_KEY); } catch (e) { raw = null; }
+  try { DB = JSON.parse(raw); } catch (e) { DB = null; }
+  const ok = DB && typeof DB === 'object' && Array.isArray(DB.profiles);
+  if (raw && !ok) {
+    BROKEN = raw;
+    try { localStorage.setItem(BROKEN_KEY, raw); } catch (e) { saveBlocked = true; }
+  } else { try { BROKEN = localStorage.getItem(BROKEN_KEY); } catch (e) { BROKEN = null; } }
+  if (!ok) DB = { profiles: [] };
+  // ほぞん して あった データも おなじ きまりで しらべる（せっていは ひとごと。まえの ぜんたい せっていは はじめの あたい）
+  DB.profiles = DB.profiles.map(p => p && typeof p === 'object' ? cleanProfile(Object.assign({}, p, { settings: Object.assign({}, DB.settings || {}, p.settings) })) : null).filter(Boolean);
+  if (!DB.profiles.length) { const p = newProfile('ためしのひと'); p.settings = cleanSettings({}); DB.profiles = [p]; }
+  if (!DB.profiles.some(p => p.id === DB.current)) DB.current = DB.profiles[0].id;
+  DB.role = DB.role === 'student' ? 'student' : 'teacher';
 }
 // ほぞんに しっぱい したら、きえない おしらせを だす（つぎに せいこう するまで）
 function saveBanner(on) {
   let b = document.getElementById('saveErr');
   if (!on) { if (b) b.remove(); return; }
   if (b) return;
-  b = el('div', { id: 'saveErr', class: 'saveerr', role: 'alert' }, '⚠ ほぞんできませんでした。iPad の ようりょうが いっぱいかも しれません。ほぞんした さくひんを PDF に して おくり、いらない さくひんを けしてから、もういちど ためしてください。');
+  b = el('div', { id: 'saveErr', class: 'saveerr', role: 'alert' }, saveBlocked
+    ? '⚠ まえの データが こわれていて、まもる ために ほぞんを とめています。「せってい」の「こわれた データを ファイルに とりだす」を してください。'
+    : '⚠ ほぞんできませんでした。iPad の ようりょうが いっぱいかも しれません。「せってい → バックアップ」で コードを ファイルに とりだし、いらない さくひんや しゃしんを けしてから、もういちど ためしてください。');
   document.body.append(b);
 }
 function saveDB() {
+  if (saveBlocked) { saveBanner(true); return false; }
   try { localStorage.setItem(STORE_KEY, JSON.stringify(DB)); saveBanner(false); return true; }
   catch (e) { saveBanner(true); return false; }
 }

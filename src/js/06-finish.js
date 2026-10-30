@@ -154,7 +154,7 @@ function renderSheet(cv, o, text, opt = {}) {
     else { missing.add(ch); fontPaint('"Klee One",serif', '#c0c8c8')(c, ch, x, y); }
   };
   const hand = opt.hand && !Array.isArray(opt.hand) ? opt.hand : {};
-  const bodyPaint = o.mode === 'glyph' ? glyphPaint : o.mode === 'font' ? fontPaint(FONTS[o.font][1], '#1b1b1b') : null;
+  const bodyPaint = o.mode === 'glyph' ? glyphPaint : o.mode === 'font' ? fontPaint((FONTS[o.font] || FONTS[0])[1], '#1b1b1b') : null;
   g.cells.forEach(({ r, c, ch, n }) => {
     const [x, y] = g.cellXY(r, c);
     if (opt.cur === n && n >= 0 && o.mode === 'hand' && !opt.exporting) { ctx.fillStyle = 'rgba(255,210,63,.45)'; ctx.fillRect(x + 1, y + 1, CELL - 2, CELL - 2); }
@@ -174,7 +174,7 @@ function renderSheet(cv, o, text, opt = {}) {
 }
 // ぜんぶの ページを がぞうに する
 async function renderPages(o, text, hand, scale) {
-  if (o.mode === 'font') await ensureFont(FONTS[o.font][1]); else await ensureFont('"Klee One"');
+  if (o.mode === 'font') await ensureFont((FONTS[o.font] || FONTS[0])[1]); else await ensureFont('"Klee One"');
   const n = sheetGeom(o, text).pages, out = [];
   for (let p = 0; p < n; p++) { const cv = document.createElement('canvas'); renderSheet(cv, o, text, { hand, exporting: true, page: p, scale }); out.push(cv); }
   return out;
@@ -188,10 +188,10 @@ let sheetGeomNow = null, sheetXf = null;
 async function drawFinish() {
   saveDB();
   const cv = $('#sheet');
-  if (fin.mode === 'font') await ensureFont(FONTS[fin.font][1]);
+  if (fin.mode === 'font') await ensureFont((FONTS[fin.font] || FONTS[0])[1]);
   else await ensureFont('"Klee One"');
   const pp = PAPERS[fin.paper] && PAPERS[fin.paper].w;
-  const res = renderSheet(cv, fin, finText(), { hand: handChars(), cur: fin.hi, page: fin.page, brMode, scale: pp ? 2 : 2 });
+  const res = renderSheet(cv, finO(), finText(), { hand: handChars(), cur: fin.hi, page: fin.page, brMode, scale: pp ? 2 : 2 });
   sheetGeomNow = res.geom; sheetXf = res.xf;
   fin.page = res.geom.page;
   const wrapW = $('.sheetwrap').clientWidth - 24;
@@ -205,9 +205,16 @@ async function drawFinish() {
   if (fin.mode === 'glyph' && res.missing.size) msgs.push('まだ とうろくしていない もじ（うすく でています）：' + [...res.missing].join(' ') + '　→「もじとうろく」で かこう');
   if (res.geom.pages > 1) msgs.push(`ぎょうすうに おさまらないので ${res.geom.pages}ページに なります（PDF では ぜんぶの ページが はいります）。`);
   mi.textContent = msgs.join('　');
+  $('#snapRow').hidden = !finSnap();
+}
+// ひらいた さくひんの「ほぞんした ときの もじ・なまえ」。ぶんしょうが かわったら（あたらしい さくひん）つかわない
+function finSnap() { const s = fin.snap; if (s && s.text !== finText()) delete fin.snap; return fin.snap || null; }
+function finO() {
+  const s = finSnap(); if (!s) return fin;
+  return Object.assign({}, fin, { nameText: s.nameText, glyphs: s.glyphs ? Object.assign({}, P().glyphs, s.glyphs) : undefined });
 }
 function renderFinish() {
-  const modesOk = isStudent() && SH().modes && SH().modes.length ? SH().modes : ['glyph', 'font', 'hand'];
+  const modesOk = isStudent() && Array.isArray(SH().modes) && SH().modes.length ? SH().modes : MODE_IDS;
   if (!modesOk.includes(fin.mode)) fin.mode = modesOk[0];
   $$('.mode').forEach(b => { b.hidden = !modesOk.includes(b.dataset.m); b.classList.toggle('on', b.dataset.m === fin.mode); });
   $('#handTools').hidden = fin.mode !== 'hand';
@@ -251,7 +258,7 @@ $('#btnPgNext').addEventListener('click', () => { fin.page++; drawFinish(); });
 // てがき：1もじずつ かく パッド
 const PADN = 300;
 let padStrokes = [];
-const handCells = () => sheetGeom(fin, finText()).allCells;
+const handCells = () => sheetGeom(finO(), finText()).allCells;
 // わくを がめんに あわせて できるだけ おおきく する（ねばりを なくすため こまかい がそで）
 function fitBigCanvas(cv, reserve) {
   const size = Math.max(200, Math.floor(Math.min(window.innerWidth - 36, window.innerHeight - reserve - 30)));

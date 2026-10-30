@@ -175,6 +175,7 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
 .showgrp{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin:6px 0 10px;font-size:16px}
 .showgrp b{min-width:9em}
 .wtog{min-height:40px;padding:4px 12px;border-radius:20px;border:2px solid var(--accent);background:var(--accent-soft);font-size:16px}
+.wtog.pin{border-color:#e0a800;background:#fff3c4}
 .wtog.off{border-color:var(--line);background:#fff;color:#9aa;text-decoration:line-through}
 label.btn{display:inline-flex;align-items:center;cursor:pointer}
 .photos{display:flex;gap:10px;flex-wrap:wrap}
@@ -337,6 +338,7 @@ label.btn{display:inline-flex;align-items:center;cursor:pointer}
         </div>
       </div>
       <div class="missing" id="missingInfo"></div>
+      <div class="row tonly" id="snapRow" hidden><span class="hint">📌 ほぞんした ときの もじ・なまえで だしています。</span><button class="btn small" id="btnSnapOff">いまの もじ・なまえに する</button></div>
       <div class="row" style="margin-top:10px">
         <button class="btn main" id="btnSaveWork">💾 ほぞんする</button>
         <button class="btn tonly" id="btnImage">📤 パソコンへ おくる（PDF・がぞう）</button>
@@ -402,8 +404,13 @@ label.btn{display:inline-flex;align-items:center;cursor:pointer}
           <select id="optCase"><option value="lower">こもじ（a b c）</option><option value="upper">おおもじ（A B C）</option></select></div>
       </div>
       <div class="card">
+        <div class="warnbox" id="brokenBox" hidden style="margin-bottom:10px">
+          <p>⚠ まえに ほぞんした データが こわれていて よみこめませんでした。けさずに とってあります。ファイルに とりだして、がっこうの ほぞん ばしょに のこしてください。</p>
+          <div class="row"><button class="btn small" id="btnBrokenSave">📥 こわれた データを ファイルに とりだす</button><button class="btn small warn" id="btnBrokenDrop">とりだしたので けす</button></div>
+        </div>
         <h2>バックアップ（ひっこし）</h2>
-        <p class="hint">とうろくした もじなどを コードに して コピーできます。べつの iPad で「よみこむ」に はりつけると つかえます。</p>
+        <p class="hint">とうろくした もじ・ことば・ぶんしょう・さくひん・しゃしん・せっていを コードに して コピーできます。べつの iPad で「よみこむ」に はりつけると つかえます。<b>ふつうは いま えらんでいる 1にんぶん</b>です。</p>
+        <label class="hint" style="display:flex;gap:8px;align-items:center;font-size:16px"><input type="checkbox" id="optExportAll" style="width:22px;height:22px"> ぜんいんぶんを 1つの コードに する（がっこうの ほぞん ばしょに のこす とき）</label>
         <div class="row">
           <button class="btn small" id="btnExport">コードを つくる</button>
           <button class="btn small" id="btnCopyExport">コピー</button>

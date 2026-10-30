@@ -74,23 +74,25 @@ function openSendModal(cvs, base) {
 }
 $('#btnImage').addEventListener('click', async () => {
   if (!finText()) return toast('①で ぶんを つくってね');
-  openSendModal(await renderPages(fin, finText(), handChars()), fileBase());
+  openSendModal(await renderPages(finO(), finText(), handChars()), fileBase());
 });
 $('#btnPrint').addEventListener('click', async () => {
   if (!finText()) return toast('①で ぶんを つくってね');
-  const cvs = await renderPages(fin, finText(), handChars());
+  const cvs = await renderPages(finO(), finText(), handChars());
   const pa = $('#printArea'); pa.innerHTML = '';
   cvs.forEach(cv => pa.append(el('img', { src: cv.toDataURL('image/png'), alt: '', style: 'page-break-after:always' })));
   setTimeout(() => window.print(), 300);
 });
 $('#btnSaveWork').addEventListener('click', () => {
   if (!finText()) return toast('①で ぶんを つくってね');
-  const w = Object.assign({ id: 'w' + Date.now(), date: new Date().toISOString(), text: finText() }, JSON.parse(JSON.stringify(fin)));
-  w.nameText = P().name;
+  // ほぞんした ときの もじ・なまえを さくひんに いれておく（あとで かえても さくひんは かわらない）
+  const o = finO(), w = Object.assign({ id: 'w' + Date.now(), date: new Date().toISOString(), text: finText(), conn: !!P().conn }, clone(fin));
+  delete w.snap;
+  w.nameText = o.nameText || P().name;
   if (fin.mode === 'glyph') {
-    const used = new Set([...w.text, ...(fin.title || ''), ...P().name]), g = {};
-    used.forEach(c => { if (P().glyphs[c]) g[c] = P().glyphs[c]; });
-    w.glyphs = JSON.parse(JSON.stringify(g));
+    const src = o.glyphs || P().glyphs, used = new Set([...w.text, ...(fin.title || ''), ...w.nameText]), g = {};
+    used.forEach(c => { if (src[c]) g[c] = src[c]; });
+    w.glyphs = clone(g);
   }
   if (fin.mode === 'hand') w.hand = JSON.parse(JSON.stringify(handChars()));
   P().works.unshift(w);
@@ -132,25 +134,41 @@ function renderWorks() {
         el('button', { class: 'btn small', onclick: () => openWork(w) }, 'ひらく'), del)));
   });
 }
+// いまの さぎょう（ぶんしょう・てがき・しあげ・つくりかた・くぎり・じゅんじょの ことば）を まとめて とる／もどす
+const WORK_KEYS = ['docSrc', 'conn', 'cuts', 'cutsText'];
+function takeState() {
+  const p = P(), st = { date: new Date().toISOString(), doc: p.doc.slice(), hand: clone(handChars()), fin: clone(fin) };
+  WORK_KEYS.forEach(k => { if (p[k] !== undefined) st[k] = clone(p[k]); });
+  return st;
+}
+function putState(st) {
+  const p = P();
+  p.doc = st.doc.slice(); p.hand = clone(st.hand || {});
+  WORK_KEYS.forEach(k => { if (st[k] !== undefined) p[k] = clone(st[k]); else delete p[k]; });
+  fin = p.fin = Object.assign({}, FIN_DEF, clone(st.fin)); fin.hi = 0; fin.page = 0;
+  if (mk.editIdx != null) delete mk.editIdx;
+}
 function openWork(w) {
   // ひらく まえに、いまの ないようを したがきに のこす（あとで もどせる）
-  if (P().doc.length || Object.keys(handChars()).length) {
-    P().draft = { date: new Date().toISOString(), doc: P().doc.slice(), hand: JSON.parse(JSON.stringify(handChars())), fin: JSON.parse(JSON.stringify(fin)) };
-  }
-  P().doc = w.text.split('\n');
-  Object.keys(FIN_DEF).forEach(k => { if (w[k] !== undefined && k !== 'hi') fin[k] = JSON.parse(JSON.stringify(w[k])); });
-  fin.page = 0;
-  P().hand = w.hand && !Array.isArray(w.hand) ? JSON.parse(JSON.stringify(w.hand)) : {}; fin.hi = 0;
-  renderFinish(); window.scrollTo(0, 0); if (saveDB()) toast(P().draft ? 'ひらきました（まえの ないようは したがきに のこしました）' : 'ひらきました');
+  const before = takeState(), oldDraft = P().draft;
+  if (P().doc.length || Object.keys(handChars()).length) P().draft = before;
+  P().doc = w.text.split('\n'); P().conn = !!w.conn;
+  Object.keys(FIN_DEF).forEach(k => { if (w[k] !== undefined && k !== 'hi') fin[k] = clone(w[k]); });
+  fin.page = 0; fin.hi = 0;
+  // ほぞんした ときの もじ・なまえで ひらく（ぶんしょうを かえるまで）
+  fin.snap = { id: w.id, text: w.text, nameText: w.nameText || P().name, glyphs: w.glyphs ? clone(w.glyphs) : null };
+  P().hand = w.hand && !Array.isArray(w.hand) ? clone(w.hand) : {};
+  if (!saveDB()) { putState(before); if (oldDraft) P().draft = oldDraft; else delete P().draft; renderFinish(); return toast('ほぞんする ばしょが たりず、ひらけませんでした'); }
+  renderFinish(); window.scrollTo(0, 0); toast(P().draft === before ? 'ひらきました（まえの ないようは したがきに のこしました）' : 'ひらきました');
 }
 function restoreDraft() {
   const d = P().draft; if (!d) return;
   // いまの ないようと いれかえる（もういちど おすと もとに もどる）
-  const now = { date: new Date().toISOString(), doc: P().doc.slice(), hand: JSON.parse(JSON.stringify(handChars())), fin: JSON.parse(JSON.stringify(fin)) };
-  P().doc = d.doc; P().hand = d.hand;
-  Object.keys(FIN_DEF).forEach(k => { if (d.fin[k] !== undefined) fin[k] = d.fin[k]; });
-  fin.page = 0; fin.hi = 0; P().draft = now;
-  renderFinish(); if (saveDB()) toast('したがきに もどしました');
+  const now = takeState();
+  putState(d); P().draft = now;
+  if (!saveDB()) { putState(now); P().draft = d; renderFinish(); return toast('ほぞんする ばしょが たりず、もどせませんでした'); }
+  renderFinish(); toast('したがきに もどしました');
 }
+$('#btnSnapOff').addEventListener('click', () => { delete fin.snap; saveDB(); renderFinish(); });
 $('#btnDraft').addEventListener('click', restoreDraft);
 
