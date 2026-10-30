@@ -266,3 +266,44 @@ test('2-B うてない もじ・れんしゅうを はぶく・ミスを みせ�
   eq(need, 'ゔぁえんそくたろう');
   noErr(pg);
 });
+
+test('2-C べつの ゆび・とめられた せん・ダイアログの フォーカス・キーの フォーカス・きょうゆう しっぱい', async b => {
+  const pg = await openPage(b);
+  // てがきの わく：ゆび2ほん・pointercancel
+  await pg.evaluate(() => { P().doc = ['あい']; fin.mode = 'hand'; saveDB(); show('finish'); });
+  await pg.click('#btnHandOpen');
+  const r = await pg.evaluate(() => {
+    const cv = $('#handPad'), R = cv.getBoundingClientRect();
+    const ev = (t, id, type, x, y) => cv.dispatchEvent(new PointerEvent(t, { pointerId: id, pointerType: type, clientX: R.left + R.width * x, clientY: R.top + R.height * y, bubbles: true, isPrimary: id === 1 }));
+    const n0 = padStrokes.length;
+    ev('pointerdown', 1, 'touch', .2, .2); ev('pointerdown', 2, 'touch', .8, .8); ev('pointermove', 1, 'touch', .3, .3); ev('pointerup', 2, 'touch', .8, .8); ev('pointerup', 1, 'touch', .3, .3);
+    const a = padStrokes.length - n0;
+    ev('pointerdown', 3, 'touch', .2, .2); ev('pointermove', 3, 'touch', .4, .4); ev('pointercancel', 3, 'touch', .4, .4);
+    const c = padStrokes.length - n0;
+    ev('pointerdown', 4, 'touch', .1, .9); ev('pointerdown', 5, 'pen', .5, .5); ev('pointermove', 5, 'pen', .6, .6); ev('pointerup', 4, 'touch', .1, .9); ev('pointerup', 5, 'pen', .6, .6);
+    return [a, c, padStrokes.length - n0, padStrokes[padStrokes.length - 1][0][0]];
+  });
+  eq(r, [1, 1, 2, 0.5], 'ゆび2ほんでも 1ぽん／とめられた せんは のこさない／ペンが ゆうせん');
+  await pg.click('#btnHandClose');
+  // ダイアログ：ひらくと なかへ、Esc で とじて もとへ
+  await pg.evaluate(() => show('setting'));
+  await pg.focus('#btnImport'); await pg.evaluate(() => { $('#exportBox').value = exportCode(); });
+  await pg.keyboard.press('Enter');
+  eq(await pg.evaluate(() => [document.querySelector('.modal').getAttribute('role'), !!document.activeElement.closest('.modal')]), ['dialog', true]);
+  await pg.keyboard.press('Escape');
+  eq(await pg.evaluate(() => [document.querySelectorAll('.modal').length, document.activeElement.id]), [0, 'btnImport']);
+  // キーを おしても フォーカスが のこる
+  await pg.evaluate(() => { P().doc = ['あい']; show('type'); });
+  const k = await pg.evaluate(() => nextKeyKana());
+  await pg.focus(`#kb .key[data-k="${k}"]`); await pg.keyboard.press('Enter');
+  ok(await pg.evaluate(() => !!document.activeElement.closest('#kb')), 'フォーカスが キーボードに のこる');
+  // きょうゆうの しっぱい（やめた とき いがい）は しらせる
+  await pg.evaluate(() => { navigator.canShare = () => true; navigator.share = () => Promise.reject(Object.assign(new Error('x'), { name: 'NotAllowedError' })); sendFile(new File(['a'], 'a.pdf')); });
+  await pg.waitForSelector('.modal .regtitle');
+  eq(await pg.textContent('.modal .regtitle'), '⚠ おくれませんでした');
+  await pg.click('.modal >> text=とじる');
+  await pg.evaluate(() => { navigator.share = () => Promise.reject(Object.assign(new Error('x'), { name: 'AbortError' })); sendFile(new File(['a'], 'a.pdf')); });
+  await pg.waitForTimeout(200);
+  eq(await pg.evaluate(() => document.querySelectorAll('.modal').length), 0, 'やめた ときは なにも ださない');
+  noErr(pg);
+});

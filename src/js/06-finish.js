@@ -355,7 +355,24 @@ $('#sheet').addEventListener('click', e => {
 window.addEventListener('resize', () => { if (currentView === 'finish') drawFinish(); });
 
 // がぞう・いんさつ・ほぞん
+// ダイアログ：よみあげ ソフトに ダイアログと つたえ、ひらいたら なかの ボタンへ、とじたら もとの ボタンへ フォーカスを もどす
+let modalSeq = 0;
 function openModal(...kids) {
-  const m = el('div', { class: 'modal', onclick: e => { if (e.target === m) m.remove(); } }, el('div', { class: 'box' }, ...kids));
-  document.body.append(m); return m;
+  const prev = document.activeElement, box = el('div', { class: 'box' }, ...kids);
+  const m = el('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', onclick: e => { if (e.target === m) m.remove(); } }, box);
+  const title = box.querySelector('.regtitle');
+  if (title) { title.id = title.id || 'mdl' + (++modalSeq); m.setAttribute('aria-labelledby', title.id); }
+  const focusables = () => [...box.querySelectorAll('button,input,select,textarea,[tabindex]')].filter(x => !x.disabled && x.offsetParent !== null);
+  m.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { e.preventDefault(); m.remove(); return; }
+    if (e.key !== 'Tab') return;
+    const f = focusables(); if (!f.length) return;
+    const i = f.indexOf(document.activeElement);
+    if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); }
+    else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
+  });
+  m.remove = () => { HTMLElement.prototype.remove.call(m); if (prev && prev.isConnected && prev.focus) prev.focus({ preventScroll: true }); };
+  document.body.append(m);
+  const f = focusables(); (box.querySelector('.btn.main') || f[0] || box).focus({ preventScroll: true });
+  return m;
 }

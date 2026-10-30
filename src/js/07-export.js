@@ -32,7 +32,13 @@ function makePDF(cvs) {
 }
 function sendFile(file) {
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    navigator.share({ files: [file], title: file.name }).catch(() => {});
+    // じぶんで やめた ときは なにも しない。それ いがいの しっぱいは しらせて、ほかの ほぞん ほうほうを だす
+    navigator.share({ files: [file], title: file.name }).catch(e => {
+      if (e && e.name === 'AbortError') return;
+      const m = openModal(el('div', { class: 'regtitle' }, '⚠ おくれませんでした'),
+        el('p', { class: 'hint' }, 'きょうゆうが うまく いきませんでした。かわりに ファイルとして ほぞんできます（「ファイル」アプリの「ダウンロード」に はいります）。'),
+        el('div', { class: 'row' }, el('button', { class: 'btn main', onclick: () => { m.remove(); saveFile(file); } }, '📥 ファイルとして ほぞん'), el('button', { class: 'btn', onclick: () => m.remove() }, 'とじる')));
+    });
   } else {
     saveFile(file);
   }

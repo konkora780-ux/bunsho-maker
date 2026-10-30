@@ -337,7 +337,7 @@ label.btn{display:inline-flex;align-items:center;cursor:pointer}
               <button class="btn" id="btnHandErase">この もじを けす</button>
               <button class="btn" id="btnHandSpeak">🔊</button>
               <label class="hint tonly"><input type="checkbox" id="optModel" checked> おてほん</label>
-              <label class="hint tonly"><input type="checkbox" id="optPenOnly"> ペンだけ</label>
+              <label class="hint tonly"><input type="checkbox" id="optPenOnly"> ゆびでは かかない（ペンで かく）</label>
               <button class="btn" id="btnHandClose">✓ おわる</button>
               <button class="btn small warn tonly" id="btnHandClear">ぜんぶ けす</button>
             </div>
@@ -1195,7 +1195,13 @@ const KB_ROWS = [
 const FINGER = { q:0,a:0,z:0,w:1,s:1,x:1,e:2,d:2,c:2,r:3,f:3,v:3,t:3,g:3,b:3,y:4,h:4,n:4,u:4,j:4,m:4,i:5,k:5,',':5,o:6,l:6,'.':6,p:7,'-':7,'!':0,'?':7 };
 const KEY_SHOW = { '-':'ー', ',':'、', '.':'。', '!':'！', '?':'？', ' ':'くうはく' };
 const keyLabel = k => KEY_SHOW[k] || (S().keyCase === 'upper' ? k.toUpperCase() : k);
+// キーを つくりなおしても、フォーカス（スイッチ・キーボード そうさ）を おなじ キーに もどす
 function renderKB() {
+  const a = document.activeElement, fk = a && a.closest && a.closest('#kb') ? a.dataset.k : null;
+  renderKB0();
+  if (fk != null) { const k = [...$$('#kb [data-k]')].find(x => x.dataset.k === fk); if (k) k.focus({ preventScroll: true }); }
+}
+function renderKB0() {
   const kb = $('#kb'); kb.innerHTML = '';
   if (KANA_MODE()) return renderKanaKB(kb);
   const nk = S().guide === 2 && !ty.done ? nextKey() : null;
@@ -1378,9 +1384,15 @@ function attachDraw(cv, o) {
   const pos = e => { const r = cv.getBoundingClientRect(); return o.toLogical((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height); };
   cv.addEventListener('pointerdown', e => {
     if (o.penOnly && o.penOnly() && e.pointerType === 'touch') return;
+    // かいている とちゅうに べつの ゆび・てのひらが ふれても、いまの せんを つづける。
+    // ただし ゆび（てのひら）の あとに ペンが きたら、ゆびの せんを すてて ペンに する
+    if (cur && cur.id !== e.pointerId) {
+      if (!(e.pointerType === 'pen' && cur.type !== 'pen')) return;
+      cur = null; o.onDraw(null);
+    }
     e.preventDefault();
     try { cv.setPointerCapture(e.pointerId); } catch (_) {}
-    cur = { id: e.pointerId, pts: [pos(e)] };
+    cur = { id: e.pointerId, type: e.pointerType, pts: [pos(e)] };
     o.onStart && o.onStart(cur.pts[0]);
     o.onDraw(cur.pts);
   });
@@ -1391,7 +1403,9 @@ function attachDraw(cv, o) {
     o.onDraw(cur.pts);
   });
   const end = e => { if (!cur || e.pointerId !== cur.id) return; o.onEnd(cur.pts); cur = null; };
-  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  cv.addEventListener('pointerup', end);
+  // システムに とめられた（てのひら・ジェスチャー・かいてん）せんは のこさない
+  cv.addEventListener('pointercancel', e => { if (!cur || e.pointerId !== cur.id) return; cur = null; o.onDraw(null); });
 }
 const r3 = v => Math.round(v * 1000) / 1000;
 function simplify(pts, minD) {
@@ -1758,9 +1772,26 @@ $('#sheet').addEventListener('click', e => {
 window.addEventListener('resize', () => { if (currentView === 'finish') drawFinish(); });
 
 // がぞう・いんさつ・ほぞん
+// ダイアログ：よみあげ ソフトに ダイアログと つたえ、ひらいたら なかの ボタンへ、とじたら もとの ボタンへ フォーカスを もどす
+let modalSeq = 0;
 function openModal(...kids) {
-  const m = el('div', { class: 'modal', onclick: e => { if (e.target === m) m.remove(); } }, el('div', { class: 'box' }, ...kids));
-  document.body.append(m); return m;
+  const prev = document.activeElement, box = el('div', { class: 'box' }, ...kids);
+  const m = el('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', onclick: e => { if (e.target === m) m.remove(); } }, box);
+  const title = box.querySelector('.regtitle');
+  if (title) { title.id = title.id || 'mdl' + (++modalSeq); m.setAttribute('aria-labelledby', title.id); }
+  const focusables = () => [...box.querySelectorAll('button,input,select,textarea,[tabindex]')].filter(x => !x.disabled && x.offsetParent !== null);
+  m.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { e.preventDefault(); m.remove(); return; }
+    if (e.key !== 'Tab') return;
+    const f = focusables(); if (!f.length) return;
+    const i = f.indexOf(document.activeElement);
+    if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); }
+    else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
+  });
+  m.remove = () => { HTMLElement.prototype.remove.call(m); if (prev && prev.isConnected && prev.focus) prev.focus({ preventScroll: true }); };
+  document.body.append(m);
+  const f = focusables(); (box.querySelector('.btn.main') || f[0] || box).focus({ preventScroll: true });
+  return m;
 }
 // ===== パソコンへ おくる（PDF・がぞう） =====
 // iPad は プリンタに つながないので、PDF や がぞうに して AirDrop・ファイル・Google ドライブ などで わたす
@@ -1796,7 +1827,13 @@ function makePDF(cvs) {
 }
 function sendFile(file) {
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    navigator.share({ files: [file], title: file.name }).catch(() => {});
+    // じぶんで やめた ときは なにも しない。それ いがいの しっぱいは しらせて、ほかの ほぞん ほうほうを だす
+    navigator.share({ files: [file], title: file.name }).catch(e => {
+      if (e && e.name === 'AbortError') return;
+      const m = openModal(el('div', { class: 'regtitle' }, '⚠ おくれませんでした'),
+        el('p', { class: 'hint' }, 'きょうゆうが うまく いきませんでした。かわりに ファイルとして ほぞんできます（「ファイル」アプリの「ダウンロード」に はいります）。'),
+        el('div', { class: 'row' }, el('button', { class: 'btn main', onclick: () => { m.remove(); saveFile(file); } }, '📥 ファイルとして ほぞん'), el('button', { class: 'btn', onclick: () => m.remove() }, 'とじる')));
+    });
   } else {
     saveFile(file);
   }
@@ -2022,7 +2059,7 @@ function openReg(ch, queue) {
       el('button', { class: 'btn', onclick: () => { strokes = []; paint(); } }, 'この もじを けす'),
       el('button', { class: 'btn', onclick: () => speak(ch) }, '🔊'),
       el('label', { class: 'hint tonly' }, modelCb, ' おてほん'),
-      el('label', { class: 'hint tonly' }, penCb, ' ペンだけ'),
+      el('label', { class: 'hint tonly' }, penCb, ' ゆびでは かかない（ペンで かく）'),
       el('button', { class: 'btn', onclick: () => { save(); m.remove(); renderGlyphGrid(); } }, '✓ おわる')));
   const m = openModal(bar, cv);
   m.onclick = null;

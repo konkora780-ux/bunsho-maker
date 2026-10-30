@@ -247,7 +247,13 @@ const KB_ROWS = [
 const FINGER = { q:0,a:0,z:0,w:1,s:1,x:1,e:2,d:2,c:2,r:3,f:3,v:3,t:3,g:3,b:3,y:4,h:4,n:4,u:4,j:4,m:4,i:5,k:5,',':5,o:6,l:6,'.':6,p:7,'-':7,'!':0,'?':7 };
 const KEY_SHOW = { '-':'ー', ',':'、', '.':'。', '!':'！', '?':'？', ' ':'くうはく' };
 const keyLabel = k => KEY_SHOW[k] || (S().keyCase === 'upper' ? k.toUpperCase() : k);
+// キーを つくりなおしても、フォーカス（スイッチ・キーボード そうさ）を おなじ キーに もどす
 function renderKB() {
+  const a = document.activeElement, fk = a && a.closest && a.closest('#kb') ? a.dataset.k : null;
+  renderKB0();
+  if (fk != null) { const k = [...$$('#kb [data-k]')].find(x => x.dataset.k === fk); if (k) k.focus({ preventScroll: true }); }
+}
+function renderKB0() {
   const kb = $('#kb'); kb.innerHTML = '';
   if (KANA_MODE()) return renderKanaKB(kb);
   const nk = S().guide === 2 && !ty.done ? nextKey() : null;

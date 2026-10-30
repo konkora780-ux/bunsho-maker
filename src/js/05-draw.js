@@ -23,9 +23,15 @@ function attachDraw(cv, o) {
   const pos = e => { const r = cv.getBoundingClientRect(); return o.toLogical((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height); };
   cv.addEventListener('pointerdown', e => {
     if (o.penOnly && o.penOnly() && e.pointerType === 'touch') return;
+    // かいている とちゅうに べつの ゆび・てのひらが ふれても、いまの せんを つづける。
+    // ただし ゆび（てのひら）の あとに ペンが きたら、ゆびの せんを すてて ペンに する
+    if (cur && cur.id !== e.pointerId) {
+      if (!(e.pointerType === 'pen' && cur.type !== 'pen')) return;
+      cur = null; o.onDraw(null);
+    }
     e.preventDefault();
     try { cv.setPointerCapture(e.pointerId); } catch (_) {}
-    cur = { id: e.pointerId, pts: [pos(e)] };
+    cur = { id: e.pointerId, type: e.pointerType, pts: [pos(e)] };
     o.onStart && o.onStart(cur.pts[0]);
     o.onDraw(cur.pts);
   });
@@ -36,7 +42,9 @@ function attachDraw(cv, o) {
     o.onDraw(cur.pts);
   });
   const end = e => { if (!cur || e.pointerId !== cur.id) return; o.onEnd(cur.pts); cur = null; };
-  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  cv.addEventListener('pointerup', end);
+  // システムに とめられた（てのひら・ジェスチャー・かいてん）せんは のこさない
+  cv.addEventListener('pointercancel', e => { if (!cur || e.pointerId !== cur.id) return; cur = null; o.onDraw(null); });
 }
 const r3 = v => Math.round(v * 1000) / 1000;
 function simplify(pts, minD) {

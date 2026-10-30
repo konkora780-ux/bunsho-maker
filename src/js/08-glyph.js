@@ -84,7 +84,7 @@ function openReg(ch, queue) {
       el('button', { class: 'btn', onclick: () => { strokes = []; paint(); } }, 'この もじを けす'),
       el('button', { class: 'btn', onclick: () => speak(ch) }, '🔊'),
       el('label', { class: 'hint tonly' }, modelCb, ' おてほん'),
-      el('label', { class: 'hint tonly' }, penCb, ' ペンだけ'),
+      el('label', { class: 'hint tonly' }, penCb, ' ゆびでは かかない（ペンで かく）'),
       el('button', { class: 'btn', onclick: () => { save(); m.remove(); renderGlyphGrid(); } }, '✓ おわる')));
   const m = openModal(bar, cv);
   m.onclick = null;
