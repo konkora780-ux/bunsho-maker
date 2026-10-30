@@ -185,6 +185,12 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
 .showgrp b{min-width:9em}
 .wtog{min-height:40px;padding:4px 12px;border-radius:20px;border:2px solid var(--accent);background:var(--accent-soft);font-size:16px}
 .wtog.off{border-color:var(--line);background:#fff;color:#9aa;text-decoration:line-through}
+label.btn{display:inline-flex;align-items:center;cursor:pointer}
+.photos{display:flex;gap:10px;flex-wrap:wrap}
+.photo{position:relative}
+.photo img{display:block;height:120px;max-width:200px;object-fit:cover;border-radius:10px;border:2px solid var(--line);cursor:zoom-in}
+.photo .x{position:absolute;top:-8px;right:-8px;min-height:36px;min-width:36px;padding:0;border-radius:18px}
+.bigphoto{display:block;max-width:100%;max-height:70vh;margin:0 auto;border-radius:12px}
 .app-version{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(8px + env(safe-area-inset-bottom,0px));font-size:.7rem;color:var(--ink);opacity:.35;pointer-events:none;z-index:5}
 @media (max-width:860px){nav.steps button{font-size:16px;gap:4px;padding:0 6px}nav.steps button .no{width:24px;height:24px}nav.steps button.tool{padding:0 10px}}
 @media (max-width:600px){.key{height:48px;font-size:20px}.bignow .bk{font-size:64px}.bignow .br{font-size:36px}.target .unit .k{font-size:26px}}
@@ -206,6 +212,14 @@ canvas.sheet{display:block;margin:0 auto;background:#fff;box-shadow:0 2px 8px rg
 <main>
   <!-- ① ぶんをつくる -->
   <section class="view" id="v-make">
+    <div class="card" id="photoCard">
+      <h2>📷 かつどうの しゃしん</h2>
+      <div class="photos" id="photoList"></div>
+      <div class="row tonly" style="margin-top:8px">
+        <label class="btn small" id="btnPhotoAdd">＋ しゃしんを いれる<input type="file" id="photoFile" accept="image/*" multiple hidden></label>
+        <span class="hint">（ひとり 6まいまで。ちいさく して この iPad に ほぞんします）</span>
+      </div>
+    </div>
     <div class="card">
       <h2>なにを かく？</h2>
       <div class="tpl-list" id="tplList"></div>
@@ -618,7 +632,52 @@ const isStudent = () => DB.role === 'student';
 const SHOW_DEF = { tpls: null, modes: null, glyph: true, hide: {}, max: 0 };
 const SH = () => S().show = Object.assign({}, SHOW_DEF, S().show);
 function shownTpls() { const l = SH().tpls; return isStudent() && l && l.length ? TPLS.filter(t => l.includes(t.id)) : TPLS; }
+// かつどうの しゃしん：ぶんを つくる ときの てがかり（せんせいが いれる）
+const PHOTO_MAX = 6, PHOTO_PX = 480;
+function renderPhotos() {
+  const ph = P().photos || [], box = $('#photoList'); box.innerHTML = '';
+  $('#photoCard').hidden = isStudent() && !ph.length;
+  if (!ph.length) box.append(el('div', { class: 'hint' }, 'しゃしんを いれると、なにを したか おもいだす ヒントに なります。'));
+  ph.forEach((x, i) => {
+    const img = el('img', { src: x.d, alt: (i + 1) + 'まいめの しゃしん' });
+    img.addEventListener('click', () => openModal(el('img', { class: 'bigphoto', src: x.d, alt: 'しゃしん' }),
+      el('div', { class: 'row', style: 'justify-content:center;margin-top:10px' }, el('button', { class: 'btn main', onclick: e => e.target.closest('.modal').remove() }, 'とじる'))));
+    box.append(el('div', { class: 'photo' }, img,
+      el('button', { class: 'btn small warn tonly x', 'aria-label': 'しゃしんを けす', onclick: () => { ph.splice(i, 1); saveDB(); renderPhotos(); } }, '✕')));
+  });
+  $('#btnPhotoAdd').hidden = ph.length >= PHOTO_MAX;
+}
+// がぞうを ながい へん PHOTO_PX まで ちいさくして JPEG に する（ほぞんの ようりょうを へらす）
+function shrinkPhoto(file) {
+  return new Promise((ok, ng) => {
+    const url = URL.createObjectURL(file), im = new Image();
+    im.onload = () => {
+      const k = Math.min(1, PHOTO_PX / Math.max(im.naturalWidth, im.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(im.naturalWidth * k)); c.height = Math.max(1, Math.round(im.naturalHeight * k));
+      const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url); ok(c.toDataURL('image/jpeg', 0.7)); c.width = c.height = 0;
+    };
+    im.onerror = () => { URL.revokeObjectURL(url); ng(); };
+    im.src = url;
+  });
+}
+$('#photoFile').addEventListener('change', async e => {
+  const files = [...e.target.files]; e.target.value = '';
+  const ph = P().photos = P().photos || [];
+  let added = 0;
+  for (const f of files) {
+    if (ph.length >= PHOTO_MAX) { toast('しゃしんは 6まいまで です'); break; }
+    let d; try { d = await shrinkPhoto(f); } catch (err) { toast('この しゃしんは よみこめません'); continue; }
+    ph.push({ d, date: new Date().toISOString() });
+    // いっぱいで ほぞん できない ときは いれない
+    if (!saveDB()) { ph.pop(); saveDB(); toast('ほぞんする ばしょが いっぱいです。いらない しゃしんや さくひんを けしてね'); break; }
+    added++;
+  }
+  renderPhotos(); if (added) toast(`しゃしんを ${added}まい いれました`);
+});
 function renderMake() {
+  renderPhotos();
   const tl = $('#tplList'); tl.innerHTML = '';
   const tpls = shownTpls();
   if (!tpls.some(t => t.id === mk.tpl)) { mk = P().mk = { tpl: tpls[0].id, vals: {}, active: null, free: '' }; }
@@ -1936,6 +1995,7 @@ function cleanProfile(src) {
     glyphs, words, wordVerb: obj(src.wordVerb),
     doc: arr(src.doc).filter(s => typeof s === 'string'),
     works: arr(src.works).filter(w => w && typeof w.text === 'string' && typeof w.mode === 'string'),
+    photos: arr(src.photos).filter(x => x && typeof x.d === 'string' && x.d.startsWith('data:image/jpeg;base64,')).slice(0, PHOTO_MAX).map(x => ({ d: x.d, date: typeof x.date === 'string' ? x.date : '' })),
     hand: obj(src.hand), settings: Object.assign({}, DEF_SET, obj(src.settings)), fin: obj(src.fin), mk: obj(src.mk),
   });
   return p;
