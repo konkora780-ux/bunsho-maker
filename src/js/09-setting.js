@@ -78,7 +78,7 @@ $('#btnDownload').addEventListener('click', () => {
 });
 // ===== データの かたち（スキーマ）と しらべかた =====
 // ひと（プロフィール）の ほぞん こうもく。ふやしたら ここと cleanProfile に たす
-// id, name, glyphs, words, wordVerb, doc, docSrc, conn, cuts, cutsText, works, photos, hand, settings(+show), fin(+snap), mk, draft
+// id, name, glyphs, words, wordVerb, doc, docIds, docSrc, conn, cuts, cutsText, works, photos, hand, settings(+show), fin(+snap), mk, draft
 const SCHEMA_V = 2;
 const IMPORT_MAX = 8 * 1024 * 1024; // よみこむ コードの おおきさの うえかぎり（もじすう）
 const LIM = { strokes: 80, pts: 3000, glyphs: 200, hand: 5000, doc: 300, line: 1000, works: 300, text: 20000, words: 200 };
@@ -171,7 +171,7 @@ function cleanMk(v) {
 }
 // ぶんしょうの さぎょう じょうたい（したがき にも つかう）
 function cleanWorkState(o) {
-  return { doc: cleanDoc(o.doc), hand: cleanHand(o.hand), fin: cleanFin(o.fin), docSrc: cleanDocSrc(o.docSrc), conn: bool(o.conn, false), cuts: intList(o.cuts, LIM.text), cutsText: str(o.cutsText, LIM.text) };
+  return { doc: cleanDoc(o.doc), hand: cleanHand(o.hand), fin: cleanFin(o.fin), docSrc: cleanDocSrc(o.docSrc), conn: bool(o.conn, false), cuts: intList(o.cuts, LIM.text), cutsText: str(o.cutsText, LIM.text), docIds: arr(o.docIds).filter(x => typeof x === 'string').map(x => x.slice(0, 40)).slice(0, LIM.doc) };
 }
 // よみこむ データを しらべて、へんな ところを とりのぞく（ほぞん して ある データにも つかう）
 function cleanProfile(src) {

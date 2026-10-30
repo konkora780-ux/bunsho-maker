@@ -207,3 +207,42 @@ test('P1-1 ぶんまつ・おねがいも かくせる／⭐で さきに だす
   await btn.click(); eq(await pg.evaluate(() => SH().hide.itsu), []);
   noErr(pg);
 });
+
+// ===== だい2だんかい =====
+test('2-A ぶんを なおす・ふやす・けす ときの てがき／くぎりの きまり', async b => {
+  const pg = await openPage(b);
+  const r = await pg.evaluate(() => {
+    const p = P();
+    p.doc = ['あいう。', 'かきく。', 'さしす。']; p.cuts = [1, 6, 11]; p.cutsText = p.doc.join('\n');
+    p.hand = { 0: { ch: 'あ', s: [[[0, 0], [1, 1]]] }, 4: { ch: 'か', s: [[[0, 0], [1, 1]]] }, 8: { ch: 'さ', s: [[[0, 0], [1, 1]]] } };
+    const ids = docIds().slice();
+    // 2ぎょうめを なおす → その ぶんの てがき・くぎりだけ きえる
+    const ents = keepAll(); ents[1].body = 'たちつてと。';
+    const lost = setDoc(ents, 'keep', true);
+    setDoc(ents, 'keep');
+    const out = { lost, doc: p.doc.slice(), hand: Object.keys(p.hand).map(k => k + p.hand[k].ch), cuts: p.cuts.slice(), sameIds: JSON.stringify(docIds()) === JSON.stringify(ids) };
+    // ふやす → まえの ものは そのまま
+    const e2 = keepAll(); e2.push({ i: -1, body: 'なに。' }); setDoc(e2, 'keep');
+    out.add = [Object.keys(p.hand).length, docIds().length, new Set(docIds()).size];
+    return out;
+  });
+  eq(r.lost, 1); eq(r.doc, ['あいう。', 'たちつてと。', 'さしす。']);
+  eq(r.hand, ['0あ', '10さ']); eq(r.cuts, [1, 13]); eq(r.sameIds, true, 'id は かわらない'); eq(r.add, [2, 4, 4]);
+  // ✏️ なおすで てがきが きえる ときは きいてくる
+  await pg.evaluate(() => { P().doc = []; P().hand = {}; saveDB(); renderMake(); });
+  await pg.click('.tpl >> text=たのしかったこと');
+  for (const w of ['きょう', 'ともだち', 'うた', 'うれしかったです。']) await pg.click(`.chip >> text="${w}"`);
+  await pg.click('#btnAddSent');
+  await pg.evaluate(() => { P().hand = { 0: { ch: 'き', s: [[[0, 0], [1, 1]]] } }; saveDB(); });
+  await pg.click('.docline >> text=✏️ なおす');
+  await pg.click('.slot >> nth=1'); await pg.click('.chip >> text="かぞく"'); await pg.click('#btnAddSent');
+  eq(await pg.textContent('.modal .regtitle'), '✋ てがきが きえます');
+  await pg.click('.modal >> text=やめる');
+  eq(await pg.evaluate(() => [P().doc, Object.keys(P().hand).length]), [['きょう、ともだちとうたをうたいました。うれしかったです。'], 1]);
+  await pg.click('#btnAddSent'); await pg.click('.modal button.warn');
+  eq(await pg.evaluate(() => [P().doc, Object.keys(P().hand).length]), [['きょう、かぞくとうたをうたいました。うれしかったです。'], 0]);
+  // せんせいの ちょくせつ なおし：おなじ ぶんは ひきつぐ
+  const r3 = await pg.evaluate(() => { P().doc = ['あいう。', 'かきく。']; delete P().docIds; P().hand = { 4: { ch: 'か', s: [[[0, 0], [1, 1]]] } }; renderDoc(); $('#docEdit').value = 'かきく。\nあたらしい。'; $('#btnApplyEdit').click(); return [P().doc, Object.keys(P().hand)]; });
+  eq(r3, [['かきく。', 'あたらしい。'], ['0']]);
+  noErr(pg);
+});

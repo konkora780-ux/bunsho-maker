@@ -135,7 +135,7 @@ function renderWorks() {
   });
 }
 // いまの さぎょう（ぶんしょう・てがき・しあげ・つくりかた・くぎり・じゅんじょの ことば）を まとめて とる／もどす
-const WORK_KEYS = ['docSrc', 'conn', 'cuts', 'cutsText'];
+const WORK_KEYS = ['docSrc', 'conn', 'cuts', 'cutsText', 'docIds'];
 function takeState() {
   const p = P(), st = { date: new Date().toISOString(), doc: p.doc.slice(), hand: clone(handChars()), fin: clone(fin) };
   WORK_KEYS.forEach(k => { if (p[k] !== undefined) st[k] = clone(p[k]); });
@@ -152,7 +152,7 @@ function openWork(w) {
   // ひらく まえに、いまの ないようを したがきに のこす（あとで もどせる）
   const before = takeState(), oldDraft = P().draft;
   if (P().doc.length || Object.keys(handChars()).length) P().draft = before;
-  P().doc = w.text.split('\n'); P().conn = !!w.conn;
+  P().doc = w.text.split('\n'); P().conn = !!w.conn; delete P().docIds;
   Object.keys(FIN_DEF).forEach(k => { if (w[k] !== undefined && k !== 'hi') fin[k] = clone(w[k]); });
   fin.page = 0; fin.hi = 0;
   // ほぞんした ときの もじ・なまえで ひらく（ぶんしょうを かえるまで）
