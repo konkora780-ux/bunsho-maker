@@ -48,22 +48,33 @@ function sendFile(file) {
 }
 // ダウンロードは にほんごの なまえだと なまえが きえる ブラウザが あるので、えいすうじの なまえに する
 function saveFile(file) {
-  const ext = file.name.split('.').pop(), d = fileBase('x').slice(2);
-  const a = el('a', { href: URL.createObjectURL(file), download: `bunsho_${d}.${ext}` });
+  const ext = file.name.split('.').pop(), d = fileBase('x').slice(2), url = URL.createObjectURL(file);
+  const a = el('a', { href: url, download: `bunsho_${d}.${ext}` });
   document.body.append(a); a.click(); a.remove();
+  // ダウンロードが はじまる じかんを おいてから てばなす（すぐ けすと Safari で ほぞんできない ことが ある）
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 // ページが おおい ときは、iPad の メモリと おくる おおきさを かんがえて いくつかの PDF に わける
+// 30ページ たまる たびに PDF に して、ページの JPEG は すぐ てばなす
 const PDF_MAX = 30;
-function openSendModal(cvs, base) {
-  const parts = [];
-  for (let i = 0; i < cvs.length; i += PDF_MAX) parts.push(cvs.slice(i, i + PDF_MAX));
-  const pdfs = parts.map((p, i) => new File([makePDF(p)], base + (parts.length > 1 ? `_${i + 1}` : '') + '.pdf', { type: 'application/pdf' }));
-  const pdf = pdfs[0];
+function pdfBuilder(base) {
+  let chunk = [], count = 0;
+  const blobs = [], flush = () => { if (chunk.length) { blobs.push(makePDF(chunk)); chunk = []; } };
+  return {
+    add(cv) { chunk.push(cv.jpg ? cv : cvToPage(cv)); count++; if (chunk.length === PDF_MAX) flush(); },
+    done() {
+      flush();
+      return { count, files: blobs.map((b, i) => new File([b], base + (blobs.length > 1 ? `_${i + 1}` : '') + '.pdf', { type: 'application/pdf' })) };
+    }
+  };
+}
+// out = { count: ページの かず, files: PDF, one: 1ページだけの ときの キャンバス（がぞうも だす） }
+function openSendModal(out, base) {
+  const pdfs = out.files, one = out.one || null;
   const btns = el('div', { class: 'row', style: 'justify-content:center' });
   const kids = [el('div', { class: 'regtitle' }, '📤 パソコンへ おくる')];
-  const one = cvs.length === 1 && !cvs[0].jpg;
-  if (one) kids.push(el('img', { class: 'imgout', src: cvs[0].toDataURL('image/png'), alt: 'しあがった ぶんしょう' }));
-  else kids.push(el('p', { class: 'hint' }, `${cvs.length}ページを PDF に しました。` + (pdfs.length > 1 ? `ページが おおいので ${pdfs.length}つの PDF に わけました。` : '')));
+  if (one) kids.push(el('img', { class: 'imgout', src: one.toDataURL('image/png'), alt: 'しあがった ぶんしょう' }));
+  else kids.push(el('p', { class: 'hint' }, `${out.count}ページを PDF に しました。` + (pdfs.length > 1 ? `ページが おおいので ${pdfs.length}つの PDF に わけました。` : '')));
   kids.push(btns);
   kids.push(el('div', { class: 'hint', style: 'max-width:560px;line-height:1.7' },
     '【おくりかた】「おくる」を おすと iPad の きょうゆう がめんが でます。',
@@ -71,15 +82,15 @@ function openSendModal(cvs, base) {
     el('br'), '・USBメモリへ：「ファイルに保存」で USB を えらぶ', el('br'),
     'ようしを えらんだ ときは、その おおきさの PDF です。パソコンで いんさつ するときに「じっさいの サイズ（100%）」を えらぶと その おおきさで、「ようしに あわせる」を えらぶと A4 などの ようしに あわせて でます。ようしを えらばない ときは A4 に おさまります。'));
   const m = openModal(...kids);
+  // iPad は キャンバスの メモリが すくないので、つかいおわったら すぐ かいほう する
+  const release = () => { if (one) one.width = one.height = 0; };
   if (IN_FRAME) {
+    release();
     btns.append(el('p', { class: 'hint' }, 'がぞうを ながおし →「“写真”に保存」で ほぞんできます。'), el('button', { class: 'btn', onclick: () => m.remove() }, 'とじる'));
     return;
   }
   pdfs.forEach((f, i) => btns.append(el('button', { class: 'btn main', onclick: () => sendFile(f) }, pdfs.length > 1 ? `📤 PDF ${i + 1}/${pdfs.length} を おくる` : '📤 PDF で おくる')));
-  // iPad は キャンバスの メモリが すくないので、つかいおわったら すぐ かいほう する
-  const release = () => cvs.forEach(c => { if (!c.jpg) c.width = c.height = 0; });
-  if (!one) release();
-  if (one) cvs[0].toBlob(blob => {
+  if (one) one.toBlob(blob => {
     release();
     const png = new File([blob], base + '.png', { type: 'image/png' });
     btns.insertBefore(el('button', { class: 'btn', onclick: () => sendFile(png) }, '📤 がぞう（PNG）で おくる'), btns.children[1] || null);
@@ -88,15 +99,26 @@ function openSendModal(cvs, base) {
   pdfs.forEach((f, i) => btns.append(el('button', { class: 'btn small', onclick: () => saveFile(f) }, pdfs.length > 1 ? `⬇ PDF ${i + 1} を ダウンロード` : '⬇ PDF を ダウンロード')));
   btns.append(el('button', { class: 'btn', onclick: () => m.remove() }, 'とじる'));
 }
+// しあげを PDF に する。1ページなら がぞうも だすので キャンバスを のこし、2ページ いじょうは 1ページずつ てばなす
+async function finishPDF(o, text, hand, base) {
+  const pb = pdfBuilder(base);
+  if (sheetGeom(o, text).pages === 1) {
+    const [cv] = await renderPages(o, text, hand); pb.add(cv);
+    return Object.assign(pb.done(), { one: cv });
+  }
+  await renderPages(o, text, hand, undefined, cv => pb.add(cv));
+  return pb.done();
+}
 $('#btnImage').addEventListener('click', async () => {
   if (!finText()) return toast('①で ぶんを つくってね');
-  openSendModal(await renderPages(finO(), finText(), handChars()), fileBase());
+  const base = fileBase();
+  try { openSendModal(await finishPDF(finO(), finText(), clone(handChars()), base), base); }
+  catch (e) { toast('PDF を つくれませんでした。もういちど ためしてください'); }
 });
 $('#btnPrint').addEventListener('click', async () => {
   if (!finText()) return toast('①で ぶんを つくってね');
-  const cvs = await renderPages(finO(), finText(), handChars());
   const pa = $('#printArea'); pa.innerHTML = '';
-  cvs.forEach(cv => pa.append(el('img', { src: cv.toDataURL('image/png'), alt: '', style: 'page-break-after:always' })));
+  await renderPages(finO(), finText(), handChars(), undefined, cv => { pa.append(el('img', { src: cv.toDataURL('image/png'), alt: '', style: 'page-break-after:always' })); });
   setTimeout(() => window.print(), 300);
 });
 $('#btnSaveWork').addEventListener('click', () => {
@@ -118,20 +140,24 @@ const MODE_NAME = { glyph: 'じぶんのもじ', font: 'iPadのもじ', hand: '�
 const selWorks = new Set();
 function updWorksBtn() { const n = P().works.filter(w => selWorks.has(w.id)).length; $('#btnWorksPDF').disabled = !n; $('#btnWorksPDF').textContent = `📤 えらんだ ${n}こを PDF に まとめて おくる`; }
 $('#btnWorksPDF').addEventListener('click', async () => {
-  const ws = P().works.filter(w => selWorks.has(w.id)); if (!ws.length) return;
+  // はじめた ときの さくひん・なまえ・もじで つくる（とちゅうで ひとを かえても まざらない）
+  const p = P(), base = fileBase() + '_まとめ';
+  const ws = p.works.filter(w => selWorks.has(w.id)).map(w => Object.assign({}, w, { nameText: w.nameText || p.name, glyphs: w.glyphs || p.glyphs }));
+  if (!ws.length) return;
   // 1ページずつ JPEG に して すぐ キャンバスを かいほう する。すすみぐあいを だす
-  const total = ws.reduce((a, w) => a + sheetGeom(w, w.text).pages, 0), pages = [];
+  const total = ws.reduce((a, w) => a + sheetGeom(w, w.text).pages, 0), pb = pdfBuilder(base);
+  let done = 0;
   const st = el('div', { class: 'toast', role: 'status' }, `PDF を つくっています 0 / ${total}`); document.body.append(st);
   const btn = $('#btnWorksPDF'); btn.disabled = true;
   try {
     for (const w of ws) await renderPages(w, w.text, w.hand, undefined, async cv => {
-      pages.push(cvToPage(cv)); st.textContent = `PDF を つくっています ${pages.length} / ${total}`;
+      pb.add(cv); st.textContent = `PDF を つくっています ${++done} / ${total}`;
       await new Promise(r => setTimeout(r, 0));
     });
-    st.remove(); openSendModal(pages, fileBase() + '_まとめ');
+    openSendModal(pb.done(), base);
   } catch (e) {
-    st.remove(); toast('PDF を つくれませんでした。えらぶ さくひんを へらして、もういちど ためしてください（さくひんは きえていません）');
-  } finally { updWorksBtn(); }
+    toast('PDF を つくれませんでした。えらぶ さくひんを へらして、もういちど ためしてください（さくひんは きえていません）');
+  } finally { st.remove(); updWorksBtn(); }
 });
 $('#btnWorksAll').addEventListener('click', () => { const all = P().works.every(w => selWorks.has(w.id)); P().works.forEach(w => all ? selWorks.delete(w.id) : selWorks.add(w.id)); renderWorks(); });
 function renderWorks() {
@@ -161,9 +187,9 @@ function renderWorks() {
   });
 }
 // いまの さぎょう（ぶんしょう・てがき・しあげ・つくりかた・くぎり・じゅんじょの ことば）を まとめて とる／もどす
-const WORK_KEYS = ['docSrc', 'conn', 'cuts', 'cutsText', 'docIds'];
+const WORK_KEYS = ['docSrc', 'lineSrc', 'conn', 'cuts', 'cutsText', 'docIds'];
 function takeState() {
-  const p = P(), st = { date: new Date().toISOString(), doc: p.doc.slice(), hand: clone(handChars()), fin: clone(fin) };
+  const p = P(), st = { date: new Date().toISOString(), doc: p.doc.slice(), hand: clone(handChars()), fin: clone(fin), mk: clone(mk) };
   WORK_KEYS.forEach(k => { if (p[k] !== undefined) st[k] = clone(p[k]); });
   return st;
 }
@@ -172,13 +198,18 @@ function putState(st) {
   p.doc = st.doc.slice(); p.hand = clone(st.hand || {});
   WORK_KEYS.forEach(k => { if (st[k] !== undefined) p[k] = clone(st[k]); else delete p[k]; });
   fin = p.fin = Object.assign({}, FIN_DEF, clone(st.fin)); fin.hi = 0; fin.page = 0;
-  if (mk.editIdx != null) delete mk.editIdx;
+  // つくりかけの ぶん（えらんだ ことば・なおしている ぶん）も もどす
+  mk = p.mk = Object.assign({ tpl: 'gamba', vals: {}, free: '' }, clone(st.mk || {}), { active: null });
+  if (!(mk.editIdx >= 0 && mk.editIdx < p.doc.length)) delete mk.editIdx;
 }
 function openWork(w) {
   // ひらく まえに、いまの ないようを したがきに のこす（あとで もどせる）
   const before = takeState(), oldDraft = P().draft;
   if (P().doc.length || Object.keys(handChars()).length) P().draft = before;
-  P().doc = w.text.split('\n'); P().conn = !!w.conn; delete P().docIds;
+  // ひらいた さくひんには、いまの ぶんの つくりかた・くぎりを もちこまない（したがきの ほうに のこる）
+  P().doc = w.text.split('\n'); P().conn = !!w.conn;
+  ['docIds', 'docSrc', 'lineSrc', 'cuts', 'cutsText'].forEach(k => delete P()[k]);
+  mk = P().mk = { tpl: mk.tpl, vals: {}, active: null, free: '' };
   Object.keys(FIN_DEF).forEach(k => { if (w[k] !== undefined && k !== 'hi') fin[k] = clone(w[k]); });
   fin.page = 0; fin.hi = 0;
   // ほぞんした ときの もじ・なまえで ひらく（ぶんしょうを かえるまで）

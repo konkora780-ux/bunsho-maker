@@ -177,10 +177,13 @@ function renderSheet(cv, o, text, opt = {}) {
 async function renderPages(o, text, hand, scale, onPage) {
   if (o.mode === 'font') await ensureFont((FONTS[o.font] || FONTS[0])[1]); else await ensureFont('"Klee One"');
   const n = sheetGeom(o, text).pages, out = [];
-  for (let p = 0; p < n; p++) {
-    const cv = document.createElement('canvas'); renderSheet(cv, o, text, { hand, exporting: true, page: p, scale });
-    if (onPage) { await onPage(cv); cv.width = cv.height = 0; } else out.push(cv);
-  }
+  try {
+    for (let p = 0; p < n; p++) {
+      const cv = document.createElement('canvas');
+      try { renderSheet(cv, o, text, { hand, exporting: true, page: p, scale }); if (onPage) await onPage(cv); else out.push(cv); }
+      finally { if (onPage) cv.width = cv.height = 0; }
+    }
+  } catch (e) { out.forEach(c => { c.width = c.height = 0; }); throw e; }
   return out;
 }
 async function ensureFont(fam) { try { await document.fonts.load(`40px ${fam}`, 'あ'); } catch (e) {} }
@@ -215,7 +218,8 @@ async function drawFinish() {
 function finSnap() { const s = fin.snap; if (s && s.text !== finText()) delete fin.snap; return fin.snap || null; }
 function finO() {
   const s = finSnap(); if (!s) return fin;
-  return Object.assign({}, fin, { nameText: s.nameText, glyphs: s.glyphs ? Object.assign({}, P().glyphs, s.glyphs) : undefined });
+  // ほぞんした ときに なかった もじは、あとで とうろくしても まぜない（いちらん・PDF と おなじ みえかた）
+  return Object.assign({}, fin, { nameText: s.nameText, glyphs: s.glyphs || undefined });
 }
 function renderFinish() {
   const ml = SH().modes, mf = Array.isArray(ml) ? MODE_IDS.filter(m => ml.includes(m)) : MODE_IDS;

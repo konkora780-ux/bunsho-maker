@@ -80,7 +80,7 @@ $('#btnDownload').addEventListener('click', () => {
 });
 // ===== データの かたち（スキーマ）と しらべかた =====
 // ひと（プロフィール）の ほぞん こうもく。ふやしたら ここと cleanProfile に たす
-// id, name, glyphs, words, wordVerb, doc, docIds, docSrc, conn, cuts, cutsText, works, photos, hand, settings(+show), fin(+snap), mk, draft
+// id, name, glyphs, words, wordVerb, doc, docIds, docSrc（ふるい）, lineSrc, conn, cuts, cutsText, works, photos, hand, settings(+show), fin(+snap), mk, draft
 const SCHEMA_V = 2;
 // うえかぎりの きまり：アプリで つくれる りょう（ほぞん ばしょ いっぱいまで）より おおきく する。
 // かきだした コードは かならず よみこめる。けずった・すてた ものが あれば FIXES に かいて しらせる
@@ -177,11 +177,12 @@ function cleanSettings(v) {
 }
 function cleanMk(v) {
   const o = obj(v), m = { tpl: pick(o.tpl, tplIds(), 'gamba'), vals: cleanVals(o.vals), active: null, free: str(o.free, LIM.line) };
+  if (Number.isInteger(o.editIdx) && o.editIdx >= 0 && o.editIdx < LIM.doc) m.editIdx = o.editIdx;
   return m;
 }
 // ぶんしょうの さぎょう じょうたい（したがき にも つかう）
 function cleanWorkState(o) {
-  return { doc: cleanDoc(o.doc), hand: cleanHand(o.hand), fin: cleanFin(o.fin), docSrc: cleanDocSrc(o.docSrc), conn: bool(o.conn, false), cuts: intList(o.cuts, LIM.text), cutsText: str(o.cutsText, LIM.text), docIds: arr(o.docIds).filter(x => typeof x === 'string').map(x => x.slice(0, 40)).slice(0, LIM.doc) };
+  return { doc: cleanDoc(o.doc), hand: cleanHand(o.hand), fin: cleanFin(o.fin), docSrc: cleanDocSrc(o.docSrc), lineSrc: cleanDocSrc(o.lineSrc), conn: bool(o.conn, false), cuts: intList(o.cuts, LIM.text), cutsText: str(o.cutsText, LIM.text), docIds: arr(o.docIds).filter(x => typeof x === 'string').map(x => x.slice(0, 40)).slice(0, LIM.doc) };
 }
 // よみこむ データを しらべて、へんな ところを とりのぞく（ほぞん して ある データにも つかう）
 function cleanProfile(src) {
@@ -202,7 +203,7 @@ function cleanProfile(src) {
   });
   // ふるい かたち：てがきが はいれつ だった ころ
   if (src.fin && src.fin.grid === false && !src.fin.gstyle) p.fin.gstyle = 'none';
-  if (src.draft && typeof src.draft === 'object') p.draft = Object.assign({ date: str(src.draft.date, 40) }, cleanWorkState(src.draft));
+  if (src.draft && typeof src.draft === 'object') p.draft = Object.assign({ date: str(src.draft.date, 40) }, cleanWorkState(src.draft), src.draft.mk ? { mk: cleanMk(src.draft.mk) } : {});
   // なくなった もの・みじかく なった ものを しらせる
   const len = v => Array.isArray(v) ? v.length : v && typeof v === 'object' ? Object.keys(v).length : 0;
   const chars = v => Array.isArray(v) ? v.filter(x => typeof x === 'string').join('').length : 0;

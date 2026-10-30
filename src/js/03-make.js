@@ -266,9 +266,13 @@ const nsLen = s => [...s].filter(c => !isSpCh(c)).length;
 const newLineId = () => 'l' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 function docIds() {
   const p = P();
-  if (!Array.isArray(p.docIds) || p.docIds.length !== p.doc.length) p.docIds = p.doc.map(newLineId);
+  const d = p.docIds, ok = Array.isArray(d) && d.length === p.doc.length && d.every(x => typeof x === 'string') && new Set(d).size === d.length;
+  if (!ok) p.docIds = p.doc.map(newLineId);
   return p.docIds;
 }
+// ぶんの つくりかた（✏️ なおす で ことばを えらびなおす ため）は ぶんの id で おぼえる（おなじ もじの ぶんでも べつべつ）
+// ふるい データ（docSrc）は ぶんの もじで さがす
+function srcOf(i) { const p = P(), id = docIds()[i]; return (p.lineSrc || {})[id] || (p.docSrc || {})[stripConn(p.doc[i] || '')] || null; }
 // ぶんしょうを かえる ときの きまり（くぎり・てがき・かいぎょう）
 //  ・ならべかえ・けす・ふやす・じゅんじょの ことばの つけはずし → ほかの ぶんの ものは そのまま ひきつぐ
 //  ・ぶんの なかみが かわった（なおした） → その ぶんの ものは きえる（まえもって しらせる）
@@ -294,6 +298,8 @@ function setDoc(entries, how, dry) {
   });
   const h = handChars(), lost = Object.keys(h).filter(k => nmap[k] == null && h[k].s && h[k].s.length).length;
   if (dry) return lost;
+  // なかみが かわった ぶん・けした ぶんの つくりかたは わすれる
+  if (p.lineSrc) { const ls = {}; entries.forEach(({ i, body }, j) => { if (i >= 0 && stripConn(old[i]) === body && p.lineSrc[newIds[j]]) ls[newIds[j]] = p.lineSrc[newIds[j]]; }); p.lineSrc = ls; }
   p.doc = lines; p.docIds = newIds;
   if (cutsOn) { p.cuts = cuts.sort((a, z) => a - z); p.cutsText = lines.join('\n'); }
   const nh = {};
@@ -329,7 +335,7 @@ function renderDoc() {
     el('span', { class: 'mv' },
       mvBtn('▲', 'うえへ', i === 0, () => moveLine(i, -1)), mvBtn('▼', 'したへ', i === last, () => moveLine(i, 1))),
     el('button', { class: 'btn small', 'aria-label': 'よむ', onclick: () => speak(s) }, '🔊'),
-    (p.docSrc || {})[stripConn(s)] ? el('button', { class: 'btn small', onclick: () => editLine(i) }, '✏️ なおす') : '',
+    srcOf(i) ? el('button', { class: 'btn small', onclick: () => editLine(i) }, '✏️ なおす') : '',
     el('button', { class: 'btn small warn tonly', onclick: () => { const ord = ident().filter(x => x !== i), how = p.conn ? 'conn' : 'keep'; confirmLoss(setDoc(ord.map(k => ({ i: k, body: stripConn(p.doc[k]) })), how, true), () => { relayDoc(ord, how); if (mk.editIdx != null) delete mk.editIdx; saveDB(); renderDoc(); renderPreview(); }); } }, '✕'))));
   $('#docEdit').value = p.doc.join('\n');
   const bad = [...new Set(p.doc.join('').split('').filter(c => !isTypable(c)))];
@@ -339,7 +345,7 @@ function renderDoc() {
 }
 // できた ぶんを よびだして、ことばを えらびなおす
 function editLine(i) {
-  const s = P().doc[i], src = (P().docSrc || {})[stripConn(s)]; if (!src) return;
+  const s = P().doc[i], src = srcOf(i); if (!src) return;
   mk = P().mk = { tpl: src.tpl, vals: Object.assign({}, src.vals), active: null, free: '', editIdx: i };
   if (src.tpl === 'onegai' && mk.vals[4] && !/^[をの]/.test(mk.vals[4])) delete mk.vals[4];
   renderMake(); window.scrollTo(0, 0);
@@ -349,12 +355,14 @@ $('#btnSpeak').addEventListener('click', () => speak(sentenceText()));
 $('#btnAddSent').addEventListener('click', () => {
   if (!sentenceComplete()) return;
   const s = sentenceText(), t = TPLS.find(t => t.id === mk.tpl);
-  // あとで ことばを えらびなおせるよう、つくりかたを おぼえておく
-  if (t.id !== 'jiyu') (P().docSrc = P().docSrc || {})[s] = { tpl: mk.tpl, vals: Object.assign({}, mk.vals) };
   const how = P().conn ? 'conn' : 'keep', ed = mk.editIdx != null && mk.editIdx < P().doc.length;
-  const ents = keepAll(); if (ed) ents[mk.editIdx].body = s; else ents.push({ i: -1, body: s });
+  const ents = keepAll(), at = ed ? mk.editIdx : ents.length; if (ed) ents[at].body = s; else ents.push({ i: -1, body: s });
+  const src = t.id !== 'jiyu' ? { tpl: mk.tpl, vals: Object.assign({}, mk.vals) } : null;
   confirmLoss(setDoc(ents, how, true), () => {
     setDoc(ents, how);
+    // あとで ことばを えらびなおせるよう、この ぶんの つくりかたを おぼえておく
+    const p = P(), id = p.docIds[at]; p.lineSrc = p.lineSrc || {};
+    if (src) p.lineSrc[id] = src; else delete p.lineSrc[id];
     mk.vals = {}; mk.active = null; mk.free = ''; delete mk.editIdx;
     renderFrame(); renderDoc(); if (saveDB()) toast(ed ? 'なおしました！' : 'いれました！');
   });

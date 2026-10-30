@@ -239,11 +239,11 @@ test('P1-3 さくひんを ひらく → したがきに もどすで さぎょ�
     const before = JSON.stringify([p.doc, p.conn, p.docSrc, p.cuts, p.cutsText, p.hand, fin.breaks]);
     p.works.push({ id: 'wx', date: '2026-10-30', text: 'べつ', mode: 'font', dir: 'yoko', cols: 10, paper: 'free' });
     openWork(p.works[0]);
-    const opened = [p.doc, p.conn, p.cuts.length ? p.cutsText === p.doc.join('\n') : false];
+    const opened = [p.doc, p.conn, p.cuts === undefined && p.cutsText === undefined && p.docSrc === undefined];
     restoreDraft();
     return { same: JSON.stringify([p.doc, p.conn, p.docSrc, p.cuts, p.cutsText, p.hand, fin.breaks]) === before, opened, again: (restoreDraft(), p.doc) };
   });
-  eq(r.same, true); eq(r.opened, [['べつ'], false, false]); eq(r.again, ['べつ']);
+  eq(r.same, true); eq(r.opened, [['べつ'], false, true]); eq(r.again, ['べつ']);
   noErr(pg);
 });
 
