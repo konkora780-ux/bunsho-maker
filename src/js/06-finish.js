@@ -181,6 +181,7 @@ async function renderPages(o, text, hand, scale, onPage) {
     for (let p = 0; p < n; p++) {
       const cv = document.createElement('canvas');
       try { renderSheet(cv, o, text, { hand, exporting: true, page: p, scale }); if (onPage) await onPage(cv); else out.push(cv); }
+      catch (e) { cv.width = cv.height = 0; throw e; }
       finally { if (onPage) cv.width = cv.height = 0; }
     }
   } catch (e) { out.forEach(c => { c.width = c.height = 0; }); throw e; }

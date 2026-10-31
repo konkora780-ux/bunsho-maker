@@ -298,6 +298,19 @@ function renderBroken() {
   if (box.hidden) return;
   if (LOAD_FIXES.length) box.append(el('p', {}, '⚠ ひらいた ときに なおした こと：'), el('ul', {}, ...LOAD_FIXES.map(x => el('li', {}, x))));
   if (saveBlocked) box.append(el('p', {}, '⚠ もとの データを まもる ために、ほぞんを とめています。したの ボタンで とりだしてから「けす」を おすと、ほぞん できるように なります。'));
+  // よみだせなかった：とりだせるとは いわず、もとの データを まもる てじゅんを だす
+  if (READ_FAIL) box.append(el('p', {}, '⚠ この iPad では ほぞんした データを よみだせませんでした。ページを とじたり、Safari の「Webサイトデータ」を けしたり しないで、がっこうの たんとうの せんせいに そうだんしてください。（ほかの iPad の バックアップが あれば、そちらは つかえます）'));
+  // のこす ばしょが なくて メモリに だけ ある もとの データ
+  if (HELD_RAW != null) {
+    const go = el('button', { class: 'btn small warn' }, 'とりだしたので ほぞんを はじめる');
+    go.addEventListener('click', () => {
+      if (go.dataset.c !== '1') { go.dataset.c = '1'; go.textContent = 'ほんとう？（もとの データに うわがき します）'; setTimeout(() => { go.dataset.c = ''; go.textContent = 'とりだしたので ほぞんを はじめる'; }, 3000); return; }
+      HELD_RAW = null; if (!brokenKeys().length) { saveBlocked = false; LOAD_FIXES = []; }
+      if (saveDB()) toast('ほぞんを はじめました'); renderSetting();
+    });
+    box.append(el('p', {}, 'もとの データを のこす ばしょが たりませんでした。いま この がめんに だけ あります。ファイルに とりだして、がっこうの ほぞん ばしょに のこしてください。'),
+      el('div', { class: 'row' }, el('button', { class: 'btn small', onclick: () => { const a = el('a', { href: URL.createObjectURL(new Blob([HELD_RAW], { type: 'application/json' })), download: 'bunsho-broken-' + Date.now() + '.json' }); document.body.append(a); a.click(); a.remove(); } }, '📥 ファイルに とりだす'), go));
+  }
   if (!ks.length) return;
   box.append(el('p', {}, `もとの データを けさずに ${ks.length}こ とってあります。ファイルに とりだして、がっこうの ほぞん ばしょに のこしてください。`));
   ks.forEach(k => {
@@ -307,7 +320,7 @@ function renderBroken() {
     drop.addEventListener('click', () => {
       if (drop.dataset.c !== '1') { drop.dataset.c = '1'; drop.textContent = 'ほんとうに けす？'; setTimeout(() => { drop.dataset.c = ''; drop.textContent = 'とりだしたので けす'; }, 3000); return; }
       try { localStorage.removeItem(k); } catch (e) {}
-      if (!brokenKeys().length) { saveBlocked = false; LOAD_FIXES = []; }
+      if (!brokenKeys().length && HELD_RAW == null && !READ_FAIL) { saveBlocked = false; LOAD_FIXES = []; }
       if (saveDB()) toast('けしました'); renderSetting();
     });
     box.append(el('div', { class: 'row' }, el('span', {}, label),

@@ -471,7 +471,8 @@ function newProfile(name) {
 // こわれた データは けさずに「.broken.じこく」に のこす（なんかいぶんでも。まえの ものを うわがき しない）。
 // のこせない・よみだせない ときは、もとの データを うわがき しないよう ほぞんを とめる
 const BROKEN_PREFIX = STORE_KEY + '.broken';
-let saveBlocked = false, LOAD_FIXES = [];
+// HELD_RAW：のこせなかった もとの データ（メモリに だけ ある。せっていから ファイルに とりだせる）
+let saveBlocked = false, LOAD_FIXES = [], HELD_RAW = null, READ_FAIL = false;
 function brokenKeys() {
   const ks = [];
   try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith(BROKEN_PREFIX)) ks.push(k); } } catch (e) {}
@@ -488,7 +489,7 @@ function keepBroken(raw) {
 const badProfile = p => !p || typeof p !== 'object' || Array.isArray(p) || typeof p.id !== 'string';
 function loadDB() {
   let raw = null;
-  try { raw = localStorage.getItem(STORE_KEY); } catch (e) { saveBlocked = true; LOAD_FIXES = ['ほぞんした データを よみだせませんでした（うわがき しないよう ほぞんを とめています）']; }
+  try { raw = localStorage.getItem(STORE_KEY); } catch (e) { saveBlocked = READ_FAIL = true; LOAD_FIXES = ['ほぞんした データを よみだせませんでした（うわがき しないよう ほぞんを とめています）']; }
   try { DB = JSON.parse(raw); } catch (e) { DB = null; }
   const ok = DB && typeof DB === 'object' && !Array.isArray(DB) && Array.isArray(DB.profiles);
   const fixes = [];
@@ -501,7 +502,7 @@ function loadDB() {
   DB.profiles = DB.profiles.filter(p => !badProfile(p)).map(p => cleanProfile(Object.assign({}, p, { settings: Object.assign({}, DB.settings || {}, p.settings) }))).filter(Boolean);
   FIXES = null;
   // なにかを なおした・すてた ときは、もとの データを そのまま のこす
-  if (raw && fixes.length) keepBroken(raw);
+  if (raw && fixes.length && !keepBroken(raw)) HELD_RAW = raw;
   LOAD_FIXES = LOAD_FIXES.concat(fixes);
   if (!DB.profiles.length) { const p = newProfile('ためしのひと'); p.settings = cleanSettings({}); DB.profiles = [p]; }
   if (!DB.profiles.some(p => p.id === DB.current)) DB.current = DB.profiles[0].id;
@@ -512,7 +513,9 @@ function saveBanner(on) {
   let b = document.getElementById('saveErr');
   if (!on) { if (b) b.remove(); return; }
   if (b) return;
-  b = el('div', { id: 'saveErr', class: 'saveerr', role: 'alert' }, saveBlocked
+  b = el('div', { id: 'saveErr', class: 'saveerr', role: 'alert' }, READ_FAIL
+    ? '⚠ ほぞんした データを よみだせないので、うわがき しないよう ほぞんを とめています。ページを とじないで、「せってい」を みてください。'
+    : saveBlocked
     ? '⚠ まえの データが こわれていて、まもる ために ほぞんを とめています。「せってい」の「こわれた データを ファイルに とりだす」を してください。'
     : '⚠ ほぞんできませんでした。iPad の ようりょうが いっぱいかも しれません。「せってい → バックアップ」で コードを ファイルに とりだし、いらない さくひんや しゃしんを けしてから、もういちど ためしてください。');
   document.body.append(b);
@@ -864,13 +867,23 @@ const nsLen = s => [...s].filter(c => !isSpCh(c)).length;
 const newLineId = () => 'l' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 function docIds() {
   const p = P();
-  const d = p.docIds, ok = Array.isArray(d) && d.length === p.doc.length && d.every(x => typeof x === 'string') && new Set(d).size === d.length;
-  if (!ok) p.docIds = p.doc.map(newLineId);
+  const d = p.docIds, same = Array.isArray(d) && d.length === p.doc.length;
+  if (!(same && d.every(x => typeof x === 'string') && new Set(d).size === d.length)) {
+    const fresh = p.doc.map(newLineId);
+    // ぶんの かずが おなじで id だけ おかしい（かさなった）ときは、つくりかたを あたらしい id に うつす
+    if (same && p.lineSrc) { const ls = {}; d.forEach((x, i) => { if (p.lineSrc[x]) ls[fresh[i]] = clone(p.lineSrc[x]); }); p.lineSrc = ls; }
+    p.docIds = fresh;
+  }
+  // ふるい データ（ぶんの もじで おぼえた docSrc）は、いまの ぶんの id へ うつして けす（あとで もどって こない）
+  if (p.docSrc) {
+    const ls = p.lineSrc = p.lineSrc || {};
+    p.doc.forEach((s, i) => { const x = p.docSrc[stripConn(s)]; if (x && !ls[p.docIds[i]]) ls[p.docIds[i]] = clone(x); });
+    delete p.docSrc;
+  }
   return p.docIds;
 }
 // ぶんの つくりかた（✏️ なおす で ことばを えらびなおす ため）は ぶんの id で おぼえる（おなじ もじの ぶんでも べつべつ）
-// ふるい データ（docSrc）は ぶんの もじで さがす
-function srcOf(i) { const p = P(), id = docIds()[i]; return (p.lineSrc || {})[id] || (p.docSrc || {})[stripConn(p.doc[i] || '')] || null; }
+function srcOf(i) { const p = P(), id = docIds()[i]; return (p.lineSrc || {})[id] || null; }
 // ぶんしょうを かえる ときの きまり（くぎり・てがき・かいぎょう）
 //  ・ならべかえ・けす・ふやす・じゅんじょの ことばの つけはずし → ほかの ぶんの ものは そのまま ひきつぐ
 //  ・ぶんの なかみが かわった（なおした） → その ぶんの ものは きえる（まえもって しらせる）
@@ -1647,6 +1660,7 @@ async function renderPages(o, text, hand, scale, onPage) {
     for (let p = 0; p < n; p++) {
       const cv = document.createElement('canvas');
       try { renderSheet(cv, o, text, { hand, exporting: true, page: p, scale }); if (onPage) await onPage(cv); else out.push(cv); }
+      catch (e) { cv.width = cv.height = 0; throw e; }
       finally { if (onPage) cv.width = cv.height = 0; }
     }
   } catch (e) { out.forEach(c => { c.width = c.height = 0; }); throw e; }
@@ -1887,23 +1901,25 @@ function makePDF(list) {
   push(`trailer\n<< /Size ${total} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
   return new Blob(parts, { type: 'application/pdf' });
 }
-function sendFile(file) {
+function sendFile(file, part) {
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     // じぶんで やめた ときは なにも しない。それ いがいの しっぱいは しらせて、ほかの ほぞん ほうほうを だす
     navigator.share({ files: [file], title: file.name }).catch(e => {
       if (e && e.name === 'AbortError') return;
       const m = openModal(el('div', { class: 'regtitle' }, '⚠ おくれませんでした'),
         el('p', { class: 'hint' }, 'きょうゆうが うまく いきませんでした。かわりに ファイルとして ほぞんできます（ふつうは「ファイル」アプリの「ダウンロード」に はいります）。'),
-        el('div', { class: 'row' }, el('button', { class: 'btn main', onclick: () => { m.remove(); saveFile(file); } }, '📥 ファイルとして ほぞん'), el('button', { class: 'btn', onclick: () => m.remove() }, 'とじる')));
+        el('div', { class: 'row' }, el('button', { class: 'btn main', onclick: () => { m.remove(); saveFile(file, part); } }, '📥 ファイルとして ほぞん'), el('button', { class: 'btn', onclick: () => m.remove() }, 'とじる')));
     });
   } else {
-    saveFile(file);
+    saveFile(file, part);
   }
 }
 // ダウンロードは にほんごの なまえだと なまえが きえる ブラウザが あるので、えいすうじの なまえに する
-function saveFile(file) {
-  const ext = file.name.split('.').pop(), d = fileBase('x').slice(2), url = URL.createObjectURL(file);
-  const a = el('a', { href: url, download: `bunsho_${d}.${ext}` });
+// part：わけた PDF の ばんごう（1・2…）。なまえに のこす。おなじ ふんに なんども ほぞん しても かさならないよう びょうも いれる
+function saveFile(file, part) {
+  const ext = file.name.split('.').pop();
+  const d = fileBase('x').slice(2) + String(new Date().getSeconds()).padStart(2, '0'), url = URL.createObjectURL(file);
+  const a = el('a', { href: url, download: `bunsho_${d}${part ? '_' + part : ''}.${ext}` });
   document.body.append(a); a.click(); a.remove();
   // ダウンロードが はじまる じかんを おいてから てばなす（すぐ けすと Safari で ほぞんできない ことが ある）
   setTimeout(() => URL.revokeObjectURL(url), 60000);
@@ -1943,36 +1959,48 @@ function openSendModal(out, base) {
     btns.append(el('p', { class: 'hint' }, 'がぞうを ながおし →「“写真”に保存」で ほぞんできます。'), el('button', { class: 'btn', onclick: () => m.remove() }, 'とじる'));
     return;
   }
-  pdfs.forEach((f, i) => btns.append(el('button', { class: 'btn main', onclick: () => sendFile(f) }, pdfs.length > 1 ? `📤 PDF ${i + 1}/${pdfs.length} を おくる` : '📤 PDF で おくる')));
+  pdfs.forEach((f, i) => btns.append(el('button', { class: 'btn main', onclick: () => sendFile(f, pdfs.length > 1 ? i + 1 : 0) }, pdfs.length > 1 ? `📤 PDF ${i + 1}/${pdfs.length} を おくる` : '📤 PDF で おくる')));
   if (one) one.toBlob(blob => {
     release();
+    // がぞうに できなかった ときは、PDF だけに する（できた ことに しない）
+    if (!blob) { btns.insertBefore(el('p', { class: 'hint' }, 'がぞう（PNG）は つくれませんでした。PDF で おくってください。'), btns.firstChild); return; }
     const png = new File([blob], base + '.png', { type: 'image/png' });
     btns.insertBefore(el('button', { class: 'btn', onclick: () => sendFile(png) }, '📤 がぞう（PNG）で おくる'), btns.children[1] || null);
     btns.insertBefore(el('button', { class: 'btn small', onclick: () => saveFile(png) }, '⬇ がぞうを ダウンロード'), btns.lastChild);
   });
-  pdfs.forEach((f, i) => btns.append(el('button', { class: 'btn small', onclick: () => saveFile(f) }, pdfs.length > 1 ? `⬇ PDF ${i + 1} を ダウンロード` : '⬇ PDF を ダウンロード')));
+  pdfs.forEach((f, i) => btns.append(el('button', { class: 'btn small', onclick: () => saveFile(f, pdfs.length > 1 ? i + 1 : 0) }, pdfs.length > 1 ? `⬇ PDF ${i + 1} を ダウンロード` : '⬇ PDF を ダウンロード')));
   btns.append(el('button', { class: 'btn', onclick: () => m.remove() }, 'とじる'));
 }
 // しあげを PDF に する。1ページなら がぞうも だすので キャンバスを のこし、2ページ いじょうは 1ページずつ てばなす
 async function finishPDF(o, text, hand, base) {
   const pb = pdfBuilder(base);
   if (sheetGeom(o, text).pages === 1) {
-    const [cv] = await renderPages(o, text, hand); pb.add(cv);
-    return Object.assign(pb.done(), { one: cv });
+    const [cv] = await renderPages(o, text, hand);
+    // JPEG・PDF に できなかった ときも キャンバスを てばなす
+    try { pb.add(cv); return Object.assign(pb.done(), { one: cv }); } catch (e) { cv.width = cv.height = 0; throw e; }
   }
   await renderPages(o, text, hand, undefined, cv => pb.add(cv));
   return pb.done();
 }
+// おした ときの しあげ・なまえ・もじ・てがきを ふかく うつして つかう（つくって いる あいだに かえても まざらない）
+function fixedFin() {
+  const o = clone(finO());
+  o.nameText = o.nameText || P().name;
+  if (o.mode === 'glyph' && !o.glyphs) o.glyphs = clone(P().glyphs);
+  return { o, text: finText(), hand: clone(handChars()) };
+}
 $('#btnImage').addEventListener('click', async () => {
   if (!finText()) return toast('①で ぶんを つくってね');
-  const base = fileBase();
-  try { openSendModal(await finishPDF(finO(), finText(), clone(handChars()), base), base); }
-  catch (e) { toast('PDF を つくれませんでした。もういちど ためしてください'); }
+  const base = fileBase(), f = fixedFin();
+  let out = null;
+  try { out = await finishPDF(f.o, f.text, f.hand, base); openSendModal(out, base); }
+  catch (e) { if (out && out.one) out.one.width = out.one.height = 0; toast('PDF を つくれませんでした。もういちど ためしてください（ぶんしょうは きえていません）'); }
 });
 $('#btnPrint').addEventListener('click', async () => {
   if (!finText()) return toast('①で ぶんを つくってね');
-  const pa = $('#printArea'); pa.innerHTML = '';
-  await renderPages(finO(), finText(), handChars(), undefined, cv => { pa.append(el('img', { src: cv.toDataURL('image/png'), alt: '', style: 'page-break-after:always' })); });
+  const pa = $('#printArea'), f = fixedFin(); pa.innerHTML = '';
+  try { await renderPages(f.o, f.text, f.hand, undefined, cv => { pa.append(el('img', { src: cv.toDataURL('image/png'), alt: '', style: 'page-break-after:always' })); }); }
+  catch (e) { pa.innerHTML = ''; return toast('いんさつの じゅんびが できませんでした。もういちど ためしてください'); }
   setTimeout(() => window.print(), 300);
 });
 $('#btnSaveWork').addEventListener('click', () => {
@@ -1995,8 +2023,8 @@ const selWorks = new Set();
 function updWorksBtn() { const n = P().works.filter(w => selWorks.has(w.id)).length; $('#btnWorksPDF').disabled = !n; $('#btnWorksPDF').textContent = `📤 えらんだ ${n}こを PDF に まとめて おくる`; }
 $('#btnWorksPDF').addEventListener('click', async () => {
   // はじめた ときの さくひん・なまえ・もじで つくる（とちゅうで ひとを かえても まざらない）
-  const p = P(), base = fileBase() + '_まとめ';
-  const ws = p.works.filter(w => selWorks.has(w.id)).map(w => Object.assign({}, w, { nameText: w.nameText || p.name, glyphs: w.glyphs || p.glyphs }));
+  const p = P(), base = fileBase() + '_まとめ', pg = clone(p.glyphs);
+  const ws = p.works.filter(w => selWorks.has(w.id)).map(w => Object.assign(clone(w), { nameText: w.nameText || p.name, glyphs: w.glyphs ? clone(w.glyphs) : pg }));
   if (!ws.length) return;
   // 1ページずつ JPEG に して すぐ キャンバスを かいほう する。すすみぐあいを だす
   const total = ws.reduce((a, w) => a + sheetGeom(w, w.text).pages, 0), pb = pdfBuilder(base);
@@ -2059,7 +2087,9 @@ function putState(st) {
 function openWork(w) {
   // ひらく まえに、いまの ないようを したがきに のこす（あとで もどせる）
   const before = takeState(), oldDraft = P().draft;
-  if (P().doc.length || Object.keys(handChars()).length) P().draft = before;
+  // ぶんしょう・てがき・つくりかけの ぶん（えらんだ ことば・かいている とちゅう・なおしている ぶん）の どれかが あれば のこす
+  const busy = Object.keys(mk.vals || {}).length || (mk.free || '').trim() || mk.editIdx != null;
+  if (P().doc.length || Object.keys(handChars()).length || busy) P().draft = before;
   // ひらいた さくひんには、いまの ぶんの つくりかた・くぎりを もちこまない（したがきの ほうに のこる）
   P().doc = w.text.split('\n'); P().conn = !!w.conn;
   ['docIds', 'docSrc', 'lineSrc', 'cuts', 'cutsText'].forEach(k => delete P()[k]);
@@ -2481,6 +2511,19 @@ function renderBroken() {
   if (box.hidden) return;
   if (LOAD_FIXES.length) box.append(el('p', {}, '⚠ ひらいた ときに なおした こと：'), el('ul', {}, ...LOAD_FIXES.map(x => el('li', {}, x))));
   if (saveBlocked) box.append(el('p', {}, '⚠ もとの データを まもる ために、ほぞんを とめています。したの ボタンで とりだしてから「けす」を おすと、ほぞん できるように なります。'));
+  // よみだせなかった：とりだせるとは いわず、もとの データを まもる てじゅんを だす
+  if (READ_FAIL) box.append(el('p', {}, '⚠ この iPad では ほぞんした データを よみだせませんでした。ページを とじたり、Safari の「Webサイトデータ」を けしたり しないで、がっこうの たんとうの せんせいに そうだんしてください。（ほかの iPad の バックアップが あれば、そちらは つかえます）'));
+  // のこす ばしょが なくて メモリに だけ ある もとの データ
+  if (HELD_RAW != null) {
+    const go = el('button', { class: 'btn small warn' }, 'とりだしたので ほぞんを はじめる');
+    go.addEventListener('click', () => {
+      if (go.dataset.c !== '1') { go.dataset.c = '1'; go.textContent = 'ほんとう？（もとの データに うわがき します）'; setTimeout(() => { go.dataset.c = ''; go.textContent = 'とりだしたので ほぞんを はじめる'; }, 3000); return; }
+      HELD_RAW = null; if (!brokenKeys().length) { saveBlocked = false; LOAD_FIXES = []; }
+      if (saveDB()) toast('ほぞんを はじめました'); renderSetting();
+    });
+    box.append(el('p', {}, 'もとの データを のこす ばしょが たりませんでした。いま この がめんに だけ あります。ファイルに とりだして、がっこうの ほぞん ばしょに のこしてください。'),
+      el('div', { class: 'row' }, el('button', { class: 'btn small', onclick: () => { const a = el('a', { href: URL.createObjectURL(new Blob([HELD_RAW], { type: 'application/json' })), download: 'bunsho-broken-' + Date.now() + '.json' }); document.body.append(a); a.click(); a.remove(); } }, '📥 ファイルに とりだす'), go));
+  }
   if (!ks.length) return;
   box.append(el('p', {}, `もとの データを けさずに ${ks.length}こ とってあります。ファイルに とりだして、がっこうの ほぞん ばしょに のこしてください。`));
   ks.forEach(k => {
@@ -2490,7 +2533,7 @@ function renderBroken() {
     drop.addEventListener('click', () => {
       if (drop.dataset.c !== '1') { drop.dataset.c = '1'; drop.textContent = 'ほんとうに けす？'; setTimeout(() => { drop.dataset.c = ''; drop.textContent = 'とりだしたので けす'; }, 3000); return; }
       try { localStorage.removeItem(k); } catch (e) {}
-      if (!brokenKeys().length) { saveBlocked = false; LOAD_FIXES = []; }
+      if (!brokenKeys().length && HELD_RAW == null && !READ_FAIL) { saveBlocked = false; LOAD_FIXES = []; }
       if (saveDB()) toast('けしました'); renderSetting();
     });
     box.append(el('div', { class: 'row' }, el('span', {}, label),

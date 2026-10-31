@@ -271,13 +271,23 @@ const nsLen = s => [...s].filter(c => !isSpCh(c)).length;
 const newLineId = () => 'l' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 function docIds() {
   const p = P();
-  const d = p.docIds, ok = Array.isArray(d) && d.length === p.doc.length && d.every(x => typeof x === 'string') && new Set(d).size === d.length;
-  if (!ok) p.docIds = p.doc.map(newLineId);
+  const d = p.docIds, same = Array.isArray(d) && d.length === p.doc.length;
+  if (!(same && d.every(x => typeof x === 'string') && new Set(d).size === d.length)) {
+    const fresh = p.doc.map(newLineId);
+    // ぶんの かずが おなじで id だけ おかしい（かさなった）ときは、つくりかたを あたらしい id に うつす
+    if (same && p.lineSrc) { const ls = {}; d.forEach((x, i) => { if (p.lineSrc[x]) ls[fresh[i]] = clone(p.lineSrc[x]); }); p.lineSrc = ls; }
+    p.docIds = fresh;
+  }
+  // ふるい データ（ぶんの もじで おぼえた docSrc）は、いまの ぶんの id へ うつして けす（あとで もどって こない）
+  if (p.docSrc) {
+    const ls = p.lineSrc = p.lineSrc || {};
+    p.doc.forEach((s, i) => { const x = p.docSrc[stripConn(s)]; if (x && !ls[p.docIds[i]]) ls[p.docIds[i]] = clone(x); });
+    delete p.docSrc;
+  }
   return p.docIds;
 }
 // ぶんの つくりかた（✏️ なおす で ことばを えらびなおす ため）は ぶんの id で おぼえる（おなじ もじの ぶんでも べつべつ）
-// ふるい データ（docSrc）は ぶんの もじで さがす
-function srcOf(i) { const p = P(), id = docIds()[i]; return (p.lineSrc || {})[id] || (p.docSrc || {})[stripConn(p.doc[i] || '')] || null; }
+function srcOf(i) { const p = P(), id = docIds()[i]; return (p.lineSrc || {})[id] || null; }
 // ぶんしょうを かえる ときの きまり（くぎり・てがき・かいぎょう）
 //  ・ならべかえ・けす・ふやす・じゅんじょの ことばの つけはずし → ほかの ぶんの ものは そのまま ひきつぐ
 //  ・ぶんの なかみが かわった（なおした） → その ぶんの ものは きえる（まえもって しらせる）
