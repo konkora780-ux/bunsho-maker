@@ -23,6 +23,11 @@ function attachDraw(cv, o) {
   // わくの そとまで ひっぱっても、ほぞんできる はんい（-1〜2）に おさめる
   const cl = v => Math.min(2, Math.max(-1, v));
   const pos = e => { const r = cv.getBoundingClientRect(); return o.toLogical(cl((e.clientX - r.left) / r.width), cl((e.clientY - r.top) / r.height)); };
+  // とても ながい 1ぽんの せん：てんが うえかぎりに ちかづいたら 1つおきに まびいて つづける（さいごまで のこる）
+  const addPt = p => {
+    if (cur.pts.length >= LIM.pts - 2) { const n = cur.pts.length - 1; cur.pts = cur.pts.filter((_, i) => i % 2 === 0 || i === n); }
+    cur.pts.push(p);
+  };
   cv.addEventListener('pointerdown', e => {
     if (o.penOnly && o.penOnly() && e.pointerType === 'touch') return;
     // せんの かずの うえかぎり（ほぞん・よみこみと おなじ）。こえる まえに とめて しらせる
@@ -44,14 +49,16 @@ function attachDraw(cv, o) {
     // まとめた うごき（coalesced）が からの ブラウザも あるので、その ときは この うごき だけ つかう
     let evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
     if (!evs || !evs.length) evs = [e];
-    // とても ながい 1ぽんの せん：てんが うえかぎりに ちかづいたら 1つおきに まびいて つづける（さいごまで のこる）
-    evs.forEach(ev => {
-      if (cur.pts.length >= LIM.pts - 2) { const n = cur.pts.length - 1; cur.pts = cur.pts.filter((_, i) => i % 2 === 0 || i === n); }
-      cur.pts.push(pos(ev));
-    });
+    evs.forEach(ev => addPt(pos(ev)));
     o.onDraw(cur.pts);
   });
-  const end = e => { if (!cur || e.pointerId !== cur.id) return; o.onEnd(cur.pts); cur = null; };
+  // ペンを はなした ところも のこす（さいごの うごきと ちがう ときだけ）
+  const end = e => {
+    if (!cur || e.pointerId !== cur.id) return;
+    const p = pos(e), q = cur.pts[cur.pts.length - 1];
+    if (!q || p[0] !== q[0] || p[1] !== q[1]) addPt(p);
+    o.onEnd(cur.pts); cur = null;
+  };
   cv.addEventListener('pointerup', end);
   // システムに とめられた（てのひら・ジェスチャー・かいてん）せんは のこさない
   cv.addEventListener('pointercancel', e => { if (!cur || e.pointerId !== cur.id) return; cur = null; o.onDraw(null); });

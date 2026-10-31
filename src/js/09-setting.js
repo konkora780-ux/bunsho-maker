@@ -326,6 +326,18 @@ function renderBroken() {
       el('div', { class: 'row' }, el('button', { class: 'btn small', onclick: () => { const a = el('a', { href: URL.createObjectURL(new Blob([HELD_RAW], { type: 'application/json' })), download: 'bunsho-broken-' + Date.now() + '.json' }); document.body.append(a); a.click(); a.remove(); } }, '📥 ファイルに とりだす'), go));
   }
   if (!ks.length) return;
+  // よみだせない ときに、まえに のこした コピーが ある：いまの データとは べつの もの として わけて だす。
+  // そうだんの ときに やくに たつので とりだしは できるが、けす ボタンは ださない
+  if (READ_FAIL) {
+    box.append(el('p', {}, `いまの データとは べつに、まえに のこした コピーが ${ks.length}こ あります（いまの データでは ありません。ふるい ないようです）。そうだんの ときに いっしょに わたせるよう、ファイルに とりだせます。`));
+    ks.forEach(k => {
+      const t = +k.slice(BROKEN_PREFIX.length + 1).replace(/_+$/, ''), d = t ? new Date(t) : null;
+      const label = d ? `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')} に のこした コピー` : 'まえに のこした コピー';
+      box.append(el('div', { class: 'row' }, el('span', {}, label),
+        el('button', { class: 'btn small', onclick: () => { let raw = ''; try { raw = localStorage.getItem(k) || ''; } catch (e) {} if (!raw) return toast('この コピーも よみだせませんでした'); const a = el('a', { href: URL.createObjectURL(new Blob([raw], { type: 'application/json' })), download: 'bunsho-old-copy-' + (t || 'old') + '.json' }); document.body.append(a); a.click(); a.remove(); } }, '📥 この コピーを ファイルに する')));
+    });
+    return;
+  }
   box.append(el('p', {}, `もとの データを けさずに ${ks.length}こ とってあります。ファイルに とりだして、がっこうの ほぞん ばしょに のこしてください。`));
   ks.forEach(k => {
     const t = +k.slice(BROKEN_PREFIX.length + 1).replace(/_+$/, ''), d = t ? new Date(t) : null;
