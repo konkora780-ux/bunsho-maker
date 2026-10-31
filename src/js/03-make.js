@@ -315,6 +315,9 @@ function setDoc(entries, how, dry) {
     }
     lines.push(ns); newIds.push(i >= 0 ? ids[i] : newLineId()); no += ns.length + 1; nq += nsLen(ns);
   });
+  // かえた あとの ぜんぶの ぶんで しらべる（ふるい ながい ぶんに じゅんじょの ことばが つく ときも）。こえる ときは なにも かえずに やめる
+  const bad = lines.findIndex(l => l.length > LIM.line);
+  if (bad >= 0) { toast(`${bad + 1}ばんめの ぶんが ながすぎて ほぞん できません。${bodyMax()}もじ までに へらしてから、もういちど してね（ぶんしょうは かわって いません）`); return null; }
   const h = handChars(), lost = Object.keys(h).filter(k => nmap[k] == null && h[k].s && h[k].s.length).length;
   if (dry) return lost;
   // なかみが かわった ぶん・けした ぶんの つくりかたは わすれる
@@ -330,8 +333,9 @@ function setDoc(entries, how, dry) {
 }
 const keepAll = () => P().doc.map((s, i) => ({ i, body: stripConn(s) }));
 function relayDoc(order, how) { return setDoc(order.map(i => ({ i, body: stripConn(P().doc[i]) })), how); }
-// てがきが きえる ときは、まえもって きく
+// てがきが きえる ときは、まえもって きく（lost が null：ながすぎて できない ので なにも しない）
 function confirmLoss(lost, go) {
+  if (lost == null) return;
   if (!lost) return go();
   const m = openModal(el('div', { class: 'regtitle' }, '✋ てがきが きえます'),
     el('p', {}, `この ぶんを かえると、③で てがきした もじが ${lost}こ きえます。`),
@@ -342,14 +346,15 @@ const ident = () => P().doc.map((_, i) => i);
 function moveLine(i, d) {
   const ord = ident(), j = i + d; if (j < 0 || j >= ord.length) return;
   [ord[i], ord[j]] = [ord[j], ord[i]];
-  relayDoc(ord, P().conn ? 'conn' : 'keep'); saveDB(); renderDoc();
+  if (relayDoc(ord, P().conn ? 'conn' : 'keep') == null) return;
+  saveDB(); renderDoc();
 }
 // きりかえる まえの じょうたいで ぶんを よむ（とる ときは じどうの ことばだけ とる）
 $('#optConn').addEventListener('change', e => {
   const on = e.target.checked; if (on === !!P().conn) return;
-  // つけると ほぞんの うえかぎりを こえる ながい ぶんが あれば つけない
-  if (on && P().doc.some(s => s.length > bodyMax())) { e.target.checked = false; return toast(`${bodyMax()}もじより ながい ぶんが あるので、じゅんじょの ことばを つけられません`); }
-  relayDoc(ident(), on ? 'conn' : 'strip'); P().conn = on; saveDB(); renderDoc(); });
+  // つけると ほぞんの うえかぎりを こえる ながい ぶんが あれば つけない（setDoc が しらべて しらせる）
+  if (relayDoc(ident(), on ? 'conn' : 'strip') == null) { e.target.checked = !on; return; }
+  P().conn = on; saveDB(); renderDoc(); });
 function renderDoc() {
   const p = P(), dl = $('#docList'); dl.innerHTML = '';
   $('#optConn').checked = !!p.conn;
@@ -360,7 +365,7 @@ function renderDoc() {
       mvBtn('▲', 'うえへ', i === 0, () => moveLine(i, -1)), mvBtn('▼', 'したへ', i === last, () => moveLine(i, 1))),
     el('button', { class: 'btn small', 'aria-label': 'よむ', onclick: () => speak(s) }, '🔊'),
     srcOf(i) ? el('button', { class: 'btn small', onclick: () => editLine(i) }, '✏️ なおす') : '',
-    el('button', { class: 'btn small warn tonly', onclick: () => { const ord = ident().filter(x => x !== i), how = p.conn ? 'conn' : 'keep'; confirmLoss(setDoc(ord.map(k => ({ i: k, body: stripConn(p.doc[k]) })), how, true), () => { relayDoc(ord, how); if (mk.editIdx != null) delete mk.editIdx; saveDB(); renderDoc(); renderPreview(); }); } }, '✕'))));
+    el('button', { class: 'btn small warn tonly', onclick: () => { const ord = ident().filter(x => x !== i), how = p.conn ? 'conn' : 'keep'; confirmLoss(setDoc(ord.map(k => ({ i: k, body: stripConn(p.doc[k]) })), how, true), () => { if (relayDoc(ord, how) == null) return; if (mk.editIdx != null) delete mk.editIdx; saveDB(); renderDoc(); renderPreview(); }); } }, '✕'))));
   $('#docEdit').value = p.doc.join('\n');
   const bad = [...new Set(p.doc.join('').split('').filter(c => !isTypable(c)))];
   $('#docWarn').textContent = bad.length ? '※ うてない もじが あります：' + bad.join(' ') + '（タイピングでは とばします）' : '';
@@ -385,7 +390,7 @@ $('#btnAddSent').addEventListener('click', () => {
   const ents = keepAll(), at = ed ? mk.editIdx : ents.length; if (ed) ents[at].body = s; else ents.push({ i: -1, body: s });
   const src = t.id !== 'jiyu' ? { tpl: mk.tpl, vals: Object.assign({}, mk.vals) } : null;
   confirmLoss(setDoc(ents, how, true), () => {
-    setDoc(ents, how);
+    if (setDoc(ents, how) == null) return;
     // あとで ことばを えらびなおせるよう、この ぶんの つくりかたを おぼえておく
     const p = P(), id = p.docIds[at]; p.lineSrc = p.lineSrc || {};
     if (src) p.lineSrc[id] = src; else delete p.lineSrc[id];
@@ -408,7 +413,7 @@ $('#btnApplyEdit').addEventListener('click', () => {
   if (n > LIM.doc || ents.some(e => e.body.length > bodyMax())) return toast(`ぶんは ${LIM.doc}ぎょう、1ぎょう ${bodyMax()}もじ までです（なおす らんは そのまま のこして います）`);
   // つけて いる ときは、あたらしい ぎょうにも ばしょに あった ことばを つける
   const how = P().conn ? 'conn' : 'keep';
-  confirmLoss(setDoc(ents, how, true), () => { setDoc(ents, how); renderDoc(); if (saveDB()) toast('なおしました'); });
+  confirmLoss(setDoc(ents, how, true), () => { if (setDoc(ents, how) == null) return; renderDoc(); if (saveDB()) toast('なおしました'); });
 });
 $('#btnClearDoc').addEventListener('click', function () {
   if (this.dataset.c !== '1') { this.dataset.c = '1'; const hn = Object.keys(handChars()).length; this.textContent = hn ? `ほんとうに けす？（てがき ${hn}もじも きえます）` : 'ほんとうに けす？'; setTimeout(() => { this.dataset.c = ''; this.textContent = 'ぜんぶ けす'; }, 3000); return; }
