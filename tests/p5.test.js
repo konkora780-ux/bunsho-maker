@@ -103,7 +103,7 @@ test('5P2-5 ながすぎて ことわった ときは id・つくりかた・ふ
   noErr(pg);
 });
 
-test('5P2-6 よみだせない とき：まえの コピーが 2こ・1こも よみだせない → しらせて、ほぞんは とまった まま、もとの ばしょも のこる', async b => {
+test('5P2-6 よみだせない とき：まえの コピーが 2こで、そのうち 1こが よみだせない → よめない ほうは しらせ、よめる ほうは とりだせる。ほぞんは とまった まま、もとの ばしょも のこる', async b => {
   const pg = await openPage(b);
   await pg.addInitScript(() => { const g = Storage.prototype.getItem; Storage.prototype.getItem = function (k) { if ((k === 'bunshoMaker.v1' || k === 'bunshoMaker.v1.broken.1700000000000') && sessionStorage.getItem('failRead')) throw new Error('read'); return g.call(this, k); }; });
   await pg.evaluate(k => { localStorage.setItem(k, '{"いまの":"データ"}'); localStorage.setItem(k + '.broken.1700000000000', '{"a":1}'); localStorage.setItem(k + '.broken.1700000100000', '{"b":2}'); sessionStorage.setItem('failRead', '1'); }, KEY);
