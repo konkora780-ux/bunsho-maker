@@ -195,43 +195,35 @@ label.btn{display:inline-flex;align-items:center;cursor:pointer}
 .app-version{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(8px + env(safe-area-inset-bottom,0px));font-size:.7rem;color:var(--ink);opacity:.35;pointer-events:none;z-index:5}
 @media (max-width:860px){nav.steps button{font-size:16px;gap:4px;padding:0 6px}nav.steps button .no{width:24px;height:24px}nav.steps button.tool{padding:0 10px}}
 @media (max-width:600px){.key{height:48px;font-size:20px}.bignow .bk{font-size:64px}.bignow .br{font-size:36px}.target .unit .k{font-size:26px}}
-/* ===== 案D ノート×シール（2026-11-01）：方眼ノートの背景＋太いふちと影のシール風ボタン＋ステップの色分け。
-   題名や見出しは かたむけない（まっすぐ）。点滅・動き続けるアニメは使わない ===== */
+/* ===== 案C おえかきノート（2026-11-01）：方眼ノートの背景＋クレヨンで描いたような青・赤・黄のふち＋手書き風の題名と見出し。
+   題名や見出しは かたむけない（まっすぐ）。影は つけない。おすと 2px だけ しずむ（しずかめ） ===== */
 :root{
-  --bg:#fdfdf6; --ink:#2a2a2a; --sub:#5a5f66; --line:#b9c4cc;
-  --accent:#2f6db3; --accent-soft:#fff3b0; --pen:#2a2a2a; --crayon-r:#c2412d;
-  --st1:#ffb15c; --st2:#8fd3ff; --st3:#9be07c; --grid:#e3ecf5;
-  --wob:16px 22px 14px 20px;
+  --bg:#fdfdf8; --ink:#2a2a2a; --sub:#5a5f66; --line:#b9c4cc;
+  --accent:#2f6db3; --accent-soft:#fff3b0; --pen:#2a2a2a; --crayon-r:#c2412d; --crayon-y:#e6a700;
+  --grid:#e3ecf5; --wob:16px 22px 14px 20px;
 }
 body{background-color:var(--bg);background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:24px 24px}
-header.top h1{font-family:var(--f-model);color:var(--ink);background:var(--hl);border:3px solid var(--pen);border-radius:var(--wob);padding:2px 16px}
-nav.steps button{border:3px solid var(--pen);border-radius:var(--wob);box-shadow:0 5px 0 var(--pen);margin-bottom:5px}
-nav.steps button .no{background:#fff;color:var(--ink);border:2px solid var(--pen)}
-nav.steps button.on{color:var(--ink);border-color:var(--pen)}
-nav.steps button.on .no{color:var(--ink)}
-nav.steps button[data-v=make].on{background:var(--st1)}
-nav.steps button[data-v=type].on{background:var(--st2)}
-nav.steps button[data-v=finish].on{background:var(--st3)}
-nav.steps button.tool.on{background:var(--accent-soft)}
-.card{background:rgba(255,255,255,.94);border:3px solid var(--pen);border-radius:18px 24px 16px 22px}
-.card>h2{display:inline-block;font-family:var(--f-model);color:var(--ink);background:var(--st1);border:2px solid var(--pen);border-radius:999px;padding:0 14px}
-.tcard{border-style:dashed}
-.tcard>h2{background:#fff}
-.btn{border:3px solid var(--pen);border-radius:var(--wob);box-shadow:0 4px 0 var(--pen);margin-bottom:4px}
-.btn.main{background:var(--st3);border-color:var(--pen);color:var(--ink)}
-.btn.warn{color:var(--crayon-r);border-color:var(--crayon-r);box-shadow:0 4px 0 var(--crayon-r)}
+header.top h1{font-family:var(--f-model);color:var(--crayon-r);font-size:28px}
+nav.steps button{border:3px solid var(--accent);border-radius:var(--wob)}
+nav.steps button .no{background:#fff;color:var(--accent);border:2px solid var(--accent)}
+nav.steps button.on{background:var(--accent-soft);border-color:var(--crayon-r);color:var(--ink)}
+nav.steps button.on .no{background:#fff;color:var(--crayon-r);border-color:var(--crayon-r)}
+.card{background:rgba(255,255,255,.92);border:3px dashed var(--crayon-y);border-radius:18px 24px 16px 22px}
+.card>h2{font-family:var(--f-model);color:var(--ink)}
+.tcard{border-color:var(--line)}
+.btn{border:3px solid var(--pen);border-radius:var(--wob)}
+.btn.main{background:var(--crayon-r);border-color:var(--crayon-r);color:#fff}
+.btn.warn{color:var(--crayon-r);border-color:var(--crayon-r)}
 .btn.on{background:var(--accent-soft);border-color:var(--crayon-r)}
-.btn:disabled{box-shadow:none}
-.chip,.tpl,.mode{border:3px solid var(--accent);border-radius:20px 14px 22px 16px;box-shadow:0 4px 0 var(--accent);margin-bottom:4px}
-.tpl.on,.mode.on{background:var(--accent-soft);border-color:var(--crayon-r);box-shadow:0 4px 0 var(--crayon-r)}
-.slot{border-color:var(--crayon-r);color:var(--crayon-r)}
-.slot.filled{background:var(--accent-soft);border-color:var(--pen)}
-.vpart{color:var(--accent);border-bottom-color:var(--accent)}
+.chip,.tpl,.mode{border:3px solid var(--accent);border-radius:20px 14px 22px 16px}
+.tpl.on,.mode.on{background:var(--accent-soft);border-color:var(--crayon-r)}
+.slot{border-color:var(--accent);color:var(--accent)}
+.slot.filled{background:var(--accent-soft);border-color:var(--crayon-r)}
 .preview,.docline{background:#fff}
-.preview{border:2px solid var(--pen)}
-.rolebtn{border:3px solid var(--pen);box-shadow:0 3px 0 var(--pen)}
+.preview{border:2px solid var(--accent)}
+.rolebtn{border:3px solid var(--pen)}
 .work,.gcell{border-width:3px}
-.btn:active:not(:disabled),nav.steps button:active,.chip:active,.tpl:active,.mode:active{transform:translateY(3px);box-shadow:0 1px 0 var(--pen)}
+.btn:active:not(:disabled),nav.steps button:active,.chip:active,.tpl:active,.mode:active{transform:translateY(2px)}
 /* ===== 第5回再評価（2026-11-01）：うごきを へらす・えらんでいる しるし・よみやすい いろ・いんさつ ===== */
 /* もじの いろ：しろ もじの あかい おび・みどりの もじを こく（ふつうの もじで 4.5:1 いじょう） */
 :root{--ng:#b83a33;--ok:#1f7a43}
