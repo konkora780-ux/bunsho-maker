@@ -220,7 +220,15 @@ nav.steps button.on .no{background:#fff;color:var(--crayon-r);border-color:var(-
 :root{--ng:#b83a33;--ok:#1f7a43}
 /* えらんでいる ところ：いろ だけでなく「✓」の シール（おおきさは かわらない：わくの そとがわに かさねる） */
 nav.steps button,.tpl,.mode,.btn{position:relative}
-nav.steps button.on::after,.tpl.on::after,.mode.on::after,.btn.on::after{content:"✓";content:"✓"/"";position:absolute;top:-10px;right:-8px;width:28px;height:28px;display:grid;place-items:center;border-radius:50%;background:#fff;color:var(--ink);border:2px solid var(--pen,#2a2a2a);font-size:17px;font-weight:700;line-height:1;pointer-events:none}
+nav.steps button.on::after,.tpl.on::after,.mode.on::after,.btn.on::after{content:"✓";content:"✓"/"";position:absolute;top:-12px;right:-12px;box-sizing:border-box;width:26px;height:26px;display:grid;place-items:center;border-radius:50%;background:#fff;color:var(--ink);border:2px solid var(--pen,#2a2a2a);font-size:15px;font-weight:700;line-height:1;pointer-events:none;z-index:2}
+/* ✓ が かかる みぎうえの ぶんだけ、もじの よこに いつも すきまを とっておく（えらぶ まえと あとで おおきさ・もじの ばしょが かわらない。iPad の えもじ・フォントの はばの ちがいにも よゆうを もたせる） */
+nav.steps button{padding-right:18px}
+nav.steps button.on::after{top:-14px;right:-16px}
+.tpl{padding-right:24px}
+#btnBrMode{padding-right:24px}
+/* せまい がめん（375px）で ながい えらびらんが よこに はみださない */
+select{max-width:100%;min-width:0}
+.opts>label{max-width:100%;min-width:0}
 /* キーボード・スイッチで うごかす ときの わく：しろい ところでも みえる こい わく */
 button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible,label.btn:focus-within{outline:4px solid var(--pen,#2a2a2a);outline-offset:3px}
 /* うごきを へらす せってい（iPad の「視差効果を減らす」）：おしても しずまない・ゆれない・ひかり つづけない */

@@ -21,49 +21,87 @@ test('6P2-4a「かいぎょうを なおす」を おす・もどすと ✓ と 
   noErr(pg);
 });
 
-test('6P2-4b 600pxの がめん：いちばん ながい かたを えらんでも ✓ が もじに かさならず、よこに はみださない。フォーカスは べつの ところに だせる', async b => {
-  const pg = await openPage(b, { viewport: { width: 600, height: 900 } });
-  await pg.click('#steps button[data-v=make]');
-  // いちばん ながい なまえの かたを えらぶ
-  await pg.evaluate(() => { const t = $$('.tpl').sort((a, z) => z.textContent.length - a.textContent.length)[0]; t.dataset.long = '1'; t.click(); });
-  const r = await pg.evaluate(mk0 => {
-    const m = eval(mk0)(), t = $$('.tpl').find(x => x.classList.contains('on'));
-    const br = t.getBoundingClientRect(), rg = document.createRange(); rg.selectNodeContents(t);
-    // もじ（えもじを ふくむ）の はしと ✓ の ばしょ（みぎうえ：みぎから 20px・うえから 18px の うちがわ）
-    const rects = [...rg.getClientRects()];
-    const hit = rects.some(q => q.right > br.right - 20 && q.top < br.top + 18);
-    return { on: m(t), lines: Math.round(br.height), hit, sw: document.documentElement.scrollWidth, iw: innerWidth, pressed: t.getAttribute('aria-pressed') };
-  }, `(${mark})`);
-  eq([r.on, r.hit, r.sw <= r.iw, r.pressed], [true, false, true, 'true'], JSON.stringify(r));
-  // Tab で べつの かたへ フォーカスを うごかしても、えらんでいる ✓ は のこる
-  let f = null;
-  for (let i = 0; i < 60 && !f; i++) { await pg.keyboard.press('Tab'); f = await pg.evaluate(() => { const a = document.activeElement; return a.classList.contains('tpl') && !a.classList.contains('on') ? [getComputedStyle(a).outlineWidth, getComputedStyle(a).outlineStyle] : null; }); }
-  eq(f, ['4px', 'solid'], 'えらんでいない かたに フォーカス');
-  eq(await pg.evaluate(mk0 => { const m = eval(mk0)(); const t = $('.tpl.on'); return [m(t), t !== document.activeElement]; }, `(${mark})`), [true, true]);
-  noErr(pg);
+// ✓（::after）の ほんとうの ばしょと おおきさ（わくこみ）と、もじ（Text ノード）の くけい との すきま。かさなると マイナス
+const measure = () => {
+  const badge = x => {
+    const s = getComputedStyle(x, '::after'), c = getComputedStyle(x), br = x.getBoundingClientRect(), n = v => parseFloat(v) || 0;
+    const extra = s.boxSizing === 'content-box' ? n(s.borderLeftWidth) + n(s.borderRightWidth) + n(s.paddingLeft) + n(s.paddingRight) : 0;
+    const extraH = s.boxSizing === 'content-box' ? n(s.borderTopWidth) + n(s.borderBottomWidth) + n(s.paddingTop) + n(s.paddingBottom) : 0;
+    const right = br.right - n(c.borderRightWidth) - n(s.right), top = br.top + n(c.borderTopWidth) + n(s.top);
+    return { left: right - n(s.width) - extra, right, top, bottom: top + n(s.height) + extraH };
+  };
+  const texts = x => { const out = [], w = document.createTreeWalker(x, NodeFilter.SHOW_TEXT); let t; while ((t = w.nextNode())) { if (!t.textContent.trim()) continue; const r = document.createRange(); r.selectNodeContents(t); out.push(...[...r.getClientRects()].filter(q => q.width > 0)); } return out; };
+  const gap = (a, q) => Math.max(q.left - a.right, a.left - q.right, q.top - a.bottom, a.top - q.bottom);
+  return x => { const a = badge(x), ts = texts(x); return { gap: Math.min(...ts.map(q => gap(a, q))), out: a.right > innerWidth || a.left < 0, lines: new Set(ts.map(q => Math.round(q.top))).size, name: x.textContent.trim().slice(0, 14) }; };
+};
+
+test('6P2-4b ✓ の ほんとうの ばしょで しらべる：375・600・768px で、えらんだ ステップ・かた（いちばん ながい）・しあげかた・かいぎょうの ✓ が もじから 4px いじょう はなれ、よこに はみださない。フォーカスは べつに だせる', async b => {
+  for (const w of [375, 600, 768]) {
+    const pg = await openPage(b, { viewport: { width: w, height: 1000 } });
+    const r = await pg.evaluate(async src => {
+      await document.fonts.ready;
+      const m = eval(src)(), res = [];
+      show('make');
+      const t = $$('.tpl').sort((a, z) => z.textContent.length - a.textContent.length)[0]; t.click();
+      const on = $('.tpl.on'), h0 = on.getBoundingClientRect().height;
+      res.push(m($('#steps button.on')), Object.assign(m(on), { long: true }));
+      P().doc = ['あいうえお。', 'かきくけこ。']; saveDB(); show('finish');
+      $$('.mode').filter(x => !x.hidden && x.classList.contains('on')).forEach(x => res.push(m(x)));
+      const brb = $('#btnBrMode'), hb = brb.getBoundingClientRect().width; brb.click(); res.push(Object.assign(m($('#btnBrMode')), { same: $('#btnBrMode').getBoundingClientRect().width === hb }));
+      return { res, h0, sw: document.documentElement.scrollWidth, iw: innerWidth };
+    }, `(${measure})`);
+    if (process.env.SHOW) console.log(w + 'px', JSON.stringify(r.res.map(x => [x.name, Math.round(x.gap * 10) / 10, x.lines])));
+    const bad = r.res.filter(x => !(x.gap >= 4) || x.out || x.same === false);
+    eq(bad, [], w + 'px ' + JSON.stringify(r.res));
+    ok(r.sw <= r.iw, w + 'px よこに はみだす');
+    if (w === 600) ok(r.res.find(x => x.long).lines >= 2, '600px で ながい かたが 2ぎょうに なって いない（しらべたい じょうたいに なって いない）' + JSON.stringify(r.res));
+    // えらぶ まえと あとで かたの たかさ・もじの ばしょが かわらない
+    const same = await pg.evaluate(() => { show('make'); const ts = $$('.tpl'), on = $('.tpl.on'), other = ts.find(x => x !== on); const k = x => { const q = x.querySelector('.em') || x; const r = x.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height), Math.round(q.getBoundingClientRect().left - r.left)]; }; const a = k(other); other.click(); const n = $$('.tpl').find(x => x.textContent === other.textContent); return [a, k(n)]; });
+    eq(same[0], same[1], w + 'px えらぶ まえと あと');
+    if (w === 600) {
+      // Tab で べつの かたへ フォーカスを うごかしても、えらんでいる ✓ は のこる
+      let f = null;
+      for (let i = 0; i < 60 && !f; i++) { await pg.keyboard.press('Tab'); f = await pg.evaluate(() => { const a = document.activeElement; return a.classList.contains('tpl') && !a.classList.contains('on') ? [getComputedStyle(a).outlineWidth, getComputedStyle(a).outlineStyle] : null; }); }
+      eq(f, ['4px', 'solid'], 'えらんでいない かたに フォーカス');
+      eq(await pg.evaluate(src => { const m = eval(src)(); const t = $('.tpl.on'); return [/✓/.test(getComputedStyle(t, '::after').content), t !== document.activeElement]; }, `(${mark})`), [true, true]);
+    }
+    noErr(pg);
+  }
 });
 
-test('6P2-4c うごきを へらす：ほんとうの ながおしで バーが のびず いろが こく なり、とちゅうで はなすと もどる・きりかわらない／ほんとうの うちまちがいは ゆれずに あかい わく', async b => {
+test('6P2-4c うごきを へらす：ほんとうの ながおしで バーが おした すぐあと・とちゅう とも いっぱいの はばで いろだけ こく なり、とちゅうで はなすと いろも もどり、ながおしの じかんが すぎても きりかわらない／ほんとうの うちまちがいは ゆれずに あかい わく', async b => {
   const out = {};
   for (const rm of ['no-preference', 'reduce']) {
     const pg = await openPage(b, { reducedMotion: rm });
     const bx = await pg.locator('#roleBtn').boundingBox(), role0 = await pg.evaluate(() => DB.role);
-    await pg.mouse.move(bx.x + bx.width / 2, bx.y + bx.height / 2); await pg.mouse.down();
-    await pg.waitForTimeout(600);
-    const mid = await pg.evaluate(() => { const f = $('#roleBtn .fill'), s = getComputedStyle(f); return [Math.round(f.getBoundingClientRect().width), $('#roleBtn').clientWidth, +s.opacity]; });
-    await pg.mouse.up(); await pg.waitForTimeout(100);
-    const after = await pg.evaluate(() => [$('#roleBtn').classList.contains('press'), DB.role]);
+    const look = () => pg.evaluate(() => { const f = $('#roleBtn .fill'), s = getComputedStyle(f); return [Math.round(f.getBoundingClientRect().width), $('#roleBtn').clientWidth, +s.opacity]; });
+    await pg.mouse.move(bx.x + bx.width / 2, bx.y + bx.height / 2);
+    const t0 = Date.now(); await pg.mouse.down();
+    await pg.waitForTimeout(40);
+    const early = await look(), tEarly = Date.now() - t0;
+    await pg.waitForTimeout(560);
+    const mid = await look(), tMid = Date.now() - t0;
+    await pg.mouse.up(); const tUp = Date.now() - t0; await pg.waitForTimeout(100);
+    const after = await pg.evaluate(() => [$('#roleBtn').classList.contains('press'), DB.role]), afterLook = await look();
+    // ながおしの じかん（1.2びょう）を すぎるまで まっても、はなした あとなら きりかわらない
+    await pg.waitForTimeout(Math.max(0, 1500 - (Date.now() - t0)));
+    const late = await pg.evaluate(() => DB.role), tLate = Date.now() - t0;
     // うちまちがい：つぎの キーでは ない かなを おす
     await pg.evaluate(() => { P().doc = ['あい']; saveDB(); show('type'); });
     const k = await pg.evaluate(() => { const nk = nextKeyKana(); return $$('#kb .key[data-k]').map(x => x.dataset.k).find(x => x !== nk && /^[ぁ-ん]$/.test(x)); });
     await pg.locator(`#kb .key[data-k="${k}"]`).dispatchEvent('pointerdown');
     const ng = await pg.evaluate(() => { const n = $('#nowCard'), s = getComputedStyle(n); return [n.classList.contains('shake'), s.animationName, ty.miss]; });
-    out[rm] = { mid, after, role0, ng };
+    out[rm] = { early, mid, after, afterLook, late, role0, ng, ms: [tEarly, tMid, tUp, tLate] };
     noErr(pg);
   }
   const n = out['no-preference'], r = out.reduce;
   ok(n.mid[0] > 0 && n.mid[0] < n.mid[1], 'ふつうの ときは バーが のびて いる とちゅう ' + n.mid);
-  eq(r.mid[0], r.mid[1], 'へらす ときは はばが かわらない（さいしょから いっぱい）');
+  const msg = o => ' （おして から ' + o.ms.join('・') + 'ms：すぐあと／とちゅう／はなした／さいご）' + JSON.stringify(o);
+  ok(n.mid[1] - n.mid[0] > 2, 'ふつうの ときは まだ いっぱいでは ない' + msg(n));
+  eq([r.early[0], r.mid[0]], [r.early[1], r.mid[1]], 'へらす ときは おした すぐあとも とちゅうも いっぱいの はば（のびない）' + msg(r));
+  ok(r.mid[2] > r.early[2], 'へらす ときは いろが だんだん こく なる' + msg(r));
+  eq(r.afterLook[2], 0, 'はなしたら いろも もどる' + msg(r));
+  for (const o of [n, r]) eq(o.late, o.role0, 'はなした あとは ながおしの じかんが すぎても きりかわらない' + msg(o));
   ok(r.mid[2] > 0.1 && r.mid[2] < 0.95, 'へらす ときは いろが とちゅうまで こく なる ' + r.mid[2]);
   for (const o of [n, r]) eq(o.after, [false, o.role0], 'とちゅうで はなすと もどる・きりかわらない');
   eq([n.ng[0], n.ng[1], n.ng[2] > 0], [true, 'shake', true]);
@@ -78,6 +116,7 @@ test('6P2-5 よみだせない とき：まえの コピーが 2つとも よめ
   let dl = 0; pg.on('download', () => { dl++; });
   eq(await pg.locator('#brokenBox button').count(), 2);
   for (const i of [0, 1]) {
+    await pg.evaluate(() => $$('.toast').forEach(x => x.remove()));  // まえの しらせが のこって いても とおらない ように けしてから
     await pg.locator('#brokenBox .row button').nth(i).click(); await pg.waitForTimeout(300);
     ok(/この コピーも よみだせませんでした/.test(await pg.evaluate(() => $$('.toast').map(x => x.textContent).join('|'))), 'しらせる ' + i);
   }
