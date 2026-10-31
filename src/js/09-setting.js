@@ -109,6 +109,16 @@ function cleanStrokes(v) {
     return b.map(p => p.map(n => Math.min(2, Math.max(-1, n))));
   }).filter(st => st.length);
 }
+// ふるい かたちの てがき：シートに じかに かいた せん（シートの ざひょう。1もじの わくの 0〜1 では ない）
+// ざひょうは かえずに、かずと へんな てんだけ しらべる
+function cleanSheetStrokes(v) {
+  const ok = p => Array.isArray(p) && p.length === 2 && p.every(n => typeof n === 'number' && isFinite(n) && Math.abs(n) < 1e6);
+  return cut(arr(v), LIM.hand, 'まえの かたちの てがきの せん').map(st => {
+    const a = cut(arr(st), LIM.pts, '1ぽんの せんの てん'), b = a.filter(ok);
+    if (b.length < a.length) note('せんの なかの おかしな てんを のぞきました');
+    return b;
+  }).filter(st => st.length);
+}
 function cleanGlyphs(v) {
   const g = {};
   cut(Object.entries(obj(v)), LIM.glyphs, 'とうろくした もじ').forEach(([c, st]) => { if ([...c].length === 1) { const s = cleanStrokes(st); if (s.length) g[c] = s; } });
@@ -151,7 +161,7 @@ function cleanWork(v) {
   delete w.snap;
   if (o.glyphs) w.glyphs = cleanGlyphs(o.glyphs);
   // ふるい かたち：シートに じかに かいた せん（はいれつ）も のこす
-  if (o.hand) w.hand = Array.isArray(o.hand) ? cleanStrokes(o.hand) : cleanHand(o.hand);
+  if (o.hand) w.hand = Array.isArray(o.hand) ? cleanSheetStrokes(o.hand) : cleanHand(o.hand);
   return w;
 }
 const tplIds = () => TPLS.map(t => t.id);
@@ -184,7 +194,7 @@ function cleanSettings(v) {
   };
 }
 function cleanMk(v) {
-  const o = obj(v), m = { tpl: pick(o.tpl, tplIds(), 'gamba'), vals: cleanVals(o.vals), active: null, free: str(o.free, LIM.line, '', 'つくりかけの ぶん') };
+  const o = obj(v), m = { tpl: pick(o.tpl, tplIds(), 'gamba'), vals: cleanVals(o.vals), active: null, free: str(o.free, LIM.text, '', 'つくりかけの ぶん') };
   if (Number.isInteger(o.editIdx) && o.editIdx >= 0 && o.editIdx < LIM.doc) m.editIdx = o.editIdx;
   return m;
 }
@@ -297,7 +307,8 @@ function renderBroken() {
   box.hidden = !ks.length && !LOAD_FIXES.length && !saveBlocked;
   if (box.hidden) return;
   if (LOAD_FIXES.length) box.append(el('p', {}, '⚠ ひらいた ときに なおした こと：'), el('ul', {}, ...LOAD_FIXES.map(x => el('li', {}, x))));
-  if (saveBlocked) box.append(el('p', {}, '⚠ もとの データを まもる ために、ほぞんを とめています。したの ボタンで とりだしてから「けす」を おすと、ほぞん できるように なります。'));
+  // よみだせない ときは、とりだせる・けせば ほぞん できる とは いわない（せんようの あんないだけ）
+  if (saveBlocked && !READ_FAIL && HELD_RAW == null) box.append(el('p', {}, '⚠ もとの データを まもる ために、ほぞんを とめています。したの ボタンで とりだしてから「けす」を おすと、ほぞん できるように なります。'));
   // よみだせなかった：とりだせるとは いわず、もとの データを まもる てじゅんを だす
   if (READ_FAIL) box.append(el('p', {}, '⚠ この iPad では ほぞんした データを よみだせませんでした。ページを とじたり、Safari の「Webサイトデータ」を けしたり しないで、がっこうの たんとうの せんせいに そうだんしてください。（ほかの iPad の バックアップが あれば、そちらは つかえます）'));
   // のこす ばしょが なくて メモリに だけ ある もとの データ
@@ -305,8 +316,11 @@ function renderBroken() {
     const go = el('button', { class: 'btn small warn' }, 'とりだしたので ほぞんを はじめる');
     go.addEventListener('click', () => {
       if (go.dataset.c !== '1') { go.dataset.c = '1'; go.textContent = 'ほんとう？（もとの データに うわがき します）'; setTimeout(() => { go.dataset.c = ''; go.textContent = 'とりだしたので ほぞんを はじめる'; }, 3000); return; }
-      HELD_RAW = null; if (!brokenKeys().length) { saveBlocked = false; LOAD_FIXES = []; }
-      if (saveDB()) toast('ほぞんを はじめました'); renderSetting();
+      // まえに のこした もの（.broken）は べつに ある ので、ほぞんを とめる りゆうは なくなる。ほぞん できた ときだけ メモリの もとの データを てばなす
+      saveBlocked = false;
+      if (saveDB()) { HELD_RAW = null; if (!brokenKeys().length) LOAD_FIXES = []; toast('ほぞんを はじめました'); }
+      else { saveBlocked = true; toast('まだ ほぞん できません。iPad の ようりょうを あけてから、もういちど おしてください'); }
+      renderSetting();
     });
     box.append(el('p', {}, 'もとの データを のこす ばしょが たりませんでした。いま この がめんに だけ あります。ファイルに とりだして、がっこうの ほぞん ばしょに のこしてください。'),
       el('div', { class: 'row' }, el('button', { class: 'btn small', onclick: () => { const a = el('a', { href: URL.createObjectURL(new Blob([HELD_RAW], { type: 'application/json' })), download: 'bunsho-broken-' + Date.now() + '.json' }); document.body.append(a); a.click(); a.remove(); } }, '📥 ファイルに とりだす'), go));

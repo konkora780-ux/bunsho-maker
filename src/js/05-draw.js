@@ -41,8 +41,14 @@ function attachDraw(cv, o) {
   });
   cv.addEventListener('pointermove', e => {
     if (!cur || e.pointerId !== cur.id) return;
-    const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
-    evs.forEach(ev => { if (cur.pts.length < LIM.pts - 1) cur.pts.push(pos(ev)); });
+    // まとめた うごき（coalesced）が からの ブラウザも あるので、その ときは この うごき だけ つかう
+    let evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+    if (!evs || !evs.length) evs = [e];
+    // とても ながい 1ぽんの せん：てんが うえかぎりに ちかづいたら 1つおきに まびいて つづける（さいごまで のこる）
+    evs.forEach(ev => {
+      if (cur.pts.length >= LIM.pts - 2) { const n = cur.pts.length - 1; cur.pts = cur.pts.filter((_, i) => i % 2 === 0 || i === n); }
+      cur.pts.push(pos(ev));
+    });
     o.onDraw(cur.pts);
   });
   const end = e => { if (!cur || e.pointerId !== cur.id) return; o.onEnd(cur.pts); cur = null; };

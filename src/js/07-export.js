@@ -217,6 +217,8 @@ function putState(st) {
   if (!(mk.editIdx >= 0 && mk.editIdx < p.doc.length)) delete mk.editIdx;
 }
 function openWork(w) {
+  // まえの かたちの てがき（シートに じかに かいた せん）は、いまの てがきに うつせないので ひらかない（いちらん・まとめPDF では みられる）
+  if (Array.isArray(w.hand) && w.hand.length) return toast('この さくひんは まえの かたちの てがきなので ひらけません。いちらんと まとめPDF では そのまま みられます（さくひんは きえていません）');
   // ひらく まえに、いまの ないようを したがきに のこす（あとで もどせる）
   const before = takeState(), oldDraft = P().draft;
   // ぶんしょう・てがき・つくりかけの ぶん（えらんだ ことば・かいている とちゅう・なおしている ぶん）の どれかが あれば のこす

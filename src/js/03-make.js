@@ -255,8 +255,10 @@ function renderPreview() {
   $('#rereadHint').hidden = !(sentenceComplete() && t.id !== 'jiyu');
   $('#btnAddSent').textContent = mk.editIdx != null ? '✓ なおした ぶんに する' : '＋ このぶんを いれる';
   const s = t.id === 'jiyu' ? sentenceText() : t.parts.map((p, i) => partText(p, i, t, '〇〇')).join('');
-  $('#sentPreview').textContent = s || '（ことばを えらぶと ここに でます）';
-  $('#btnAddSent').disabled = !sentenceComplete();
+  // ながすぎる ときは けさずに のこして、へらして もらう
+  const over = s.length - bodyMax();
+  $('#sentPreview').textContent = over > 0 ? `（ながすぎます。あと ${over}もじ へらしてね）` : s || '（ことばを えらぶと ここに でます）';
+  $('#btnAddSent').disabled = !sentenceComplete() || over > 0;
 }
 // じゅんじょの ことば（1ぎょうめ・あいだ・さいごの ぎょう）
 const CONN = ['はじめに、', 'つぎに、', 'さいごに、'];
@@ -264,6 +266,8 @@ const CONN = ['はじめに、', 'つぎに、', 'さいごに、'];
 // じぶんで かいた「はじめに、」は ぶんの いちぶ（1ぶんの ときは じどうの ことばは つかないので とらない）
 const connOn = () => !!P().conn && P().doc.length >= 2;
 const connAt = (j, n) => CONN[j === 0 ? 0 : j === n - 1 ? 2 : 1];
+// 1つの ぶんの ながさの うえかぎり：じどうの ことば（いちばん ながい「さいごに、」）を つけても ほぞんの うえかぎり（LIM.line）に おさまる ながさ
+const bodyMax = () => LIM.line - Math.max(...CONN.map(c => c.length));
 const stripConn = s => { const c = connOn() && CONN.find(c => s.startsWith(c)); return c ? s.slice(c.length) : s; };
 const isSpCh = c => c === ' ' || c === '　';
 const nsLen = s => [...s].filter(c => !isSpCh(c)).length;
@@ -341,7 +345,11 @@ function moveLine(i, d) {
   relayDoc(ord, P().conn ? 'conn' : 'keep'); saveDB(); renderDoc();
 }
 // きりかえる まえの じょうたいで ぶんを よむ（とる ときは じどうの ことばだけ とる）
-$('#optConn').addEventListener('change', e => { const on = e.target.checked; if (on === !!P().conn) return; relayDoc(ident(), on ? 'conn' : 'strip'); P().conn = on; saveDB(); renderDoc(); });
+$('#optConn').addEventListener('change', e => {
+  const on = e.target.checked; if (on === !!P().conn) return;
+  // つけると ほぞんの うえかぎりを こえる ながい ぶんが あれば つけない
+  if (on && P().doc.some(s => s.length > bodyMax())) { e.target.checked = false; return toast(`${bodyMax()}もじより ながい ぶんが あるので、じゅんじょの ことばを つけられません`); }
+  relayDoc(ident(), on ? 'conn' : 'strip'); P().conn = on; saveDB(); renderDoc(); });
 function renderDoc() {
   const p = P(), dl = $('#docList'); dl.innerHTML = '';
   $('#optConn').checked = !!p.conn;
@@ -373,7 +381,7 @@ $('#btnAddSent').addEventListener('click', () => {
   const s = sentenceText(), t = TPLS.find(t => t.id === mk.tpl);
   const how = P().conn ? 'conn' : 'keep', ed = mk.editIdx != null && mk.editIdx < P().doc.length;
   if (!ed && P().doc.length >= LIM.doc) return toast(`ぶんは ${LIM.doc}こ までです`);
-  if (s.length > LIM.line) return toast(`1つの ぶんは ${LIM.line}もじ までです`);
+  if (s.length > bodyMax()) return toast(`1つの ぶんは ${bodyMax()}もじ までです`);
   const ents = keepAll(), at = ed ? mk.editIdx : ents.length; if (ed) ents[at].body = s; else ents.push({ i: -1, body: s });
   const src = t.id !== 'jiyu' ? { tpl: mk.tpl, vals: Object.assign({}, mk.vals) } : null;
   confirmLoss(setDoc(ents, how, true), () => {
@@ -390,13 +398,14 @@ $('#btnApplyEdit').addEventListener('click', () => {
   // おなじ ぶんは ひきつぐ（てがき・くぎりも）。かわった ぶんは あたらしい ぶん
   const used = new Set(), old = P().doc;
   const ls = $('#docEdit').value.split('\n').map(s => normText(s.trim())).filter(Boolean), n = ls.length;
-  if (n > LIM.doc || ls.some(t => t.length > LIM.line)) return toast(`ぶんは ${LIM.doc}ぎょう、1ぎょう ${LIM.line}もじ までです`);
   const ents = ls.map((t, j) => {
     const i = old.findIndex((o, k) => o === t && !used.has(k)); if (i >= 0) { used.add(i); return { i, body: stripConn(t) }; }
     // あたらしく かいた ぎょう：その ばしょの じどうの ことばと おなじ ときだけ じどうの ことばと みなす（ちがう ことばは ぶんの いちぶ）
     const c = connOn() && n >= 2 && connAt(j, n);
     return { i: -1, body: c && t.startsWith(c) ? t.slice(c.length) : t };
   });
+  // じどうの ことばを つけても おさまるか（つけた あとの ながさで しらべる）
+  if (n > LIM.doc || ents.some(e => e.body.length > bodyMax())) return toast(`ぶんは ${LIM.doc}ぎょう、1ぎょう ${bodyMax()}もじ までです（なおす らんは そのまま のこして います）`);
   // つけて いる ときは、あたらしい ぎょうにも ばしょに あった ことばを つける
   const how = P().conn ? 'conn' : 'keep';
   confirmLoss(setDoc(ents, how, true), () => { setDoc(ents, how); renderDoc(); if (saveDB()) toast('なおしました'); });
