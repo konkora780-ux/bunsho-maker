@@ -226,7 +226,7 @@ function renderFinish() {
   const ml = SH().modes, mf = Array.isArray(ml) ? MODE_IDS.filter(m => ml.includes(m)) : MODE_IDS;
   const modesOk = !isStudent() ? MODE_IDS : mf.length ? mf : [SHOW_MIN.mode];
   if (!modesOk.includes(fin.mode)) fin.mode = modesOk[0];
-  $$('.mode').forEach(b => { b.hidden = !modesOk.includes(b.dataset.m); b.classList.toggle('on', b.dataset.m === fin.mode); });
+  $$('.mode').forEach(b => { b.hidden = !modesOk.includes(b.dataset.m); b.classList.toggle('on', b.dataset.m === fin.mode); b.setAttribute('aria-pressed', b.dataset.m === fin.mode ? 'true' : 'false'); });
   $('#handTools').hidden = fin.mode !== 'hand';
   $('#lblFont').hidden = fin.mode !== 'font';
   $('#lblWeight').hidden = fin.mode === 'font';
@@ -242,7 +242,7 @@ function renderFinish() {
   $('#optName').checked = fin.name; $('#optSentBreak').checked = fin.sentBreak !== false;
   $('#optTitle').value = fin.title || '';
   $('#optModel').checked = fin.model; $('#optPenOnly').checked = fin.penOnly;
-  $('#btnBrMode').classList.toggle('on', brMode);
+  $('#btnBrMode').classList.toggle('on', brMode); $('#btnBrMode').setAttribute('aria-pressed', brMode ? 'true' : 'false');
   $('#brHint').hidden = !brMode;
   drawFinish(); renderWorks();
   if (fin.mode === 'hand') renderHandPad();

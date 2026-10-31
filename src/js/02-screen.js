@@ -3,7 +3,7 @@ let currentView = 'make';
 function show(v) {
   currentView = v;
   $$('section.view').forEach(s => s.hidden = s.id !== 'v-' + v);
-  $$('#steps button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  $$('#steps button').forEach(b => { const on = b.dataset.v === v; b.classList.toggle('on', on); if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
   if (v === 'make') renderMake();
   if (v === 'type') startTyping();
   if (v === 'finish') renderFinish();

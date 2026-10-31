@@ -142,7 +142,7 @@ function renderMake() {
   const tl = $('#tplList'); tl.innerHTML = '';
   const tpls = shownTpls();
   if (!tpls.some(t => t.id === mk.tpl)) { mk = P().mk = { tpl: tpls[0].id, vals: {}, active: null, free: '' }; }
-  tpls.forEach(t => tl.append(el('button', { class: 'tpl' + (t.id === mk.tpl ? ' on' : ''), onclick: () => { mk = P().mk = { tpl: t.id, vals: {}, active: null, free: '' }; saveDB(); renderMake(); } },
+  tpls.forEach(t => tl.append(el('button', { class: 'tpl' + (t.id === mk.tpl ? ' on' : ''), 'aria-pressed': t.id === mk.tpl ? 'true' : 'false', onclick: () => { mk = P().mk = { tpl: t.id, vals: {}, active: null, free: '' }; saveDB(); renderMake(); } },
     el('span', { class: 'em' }, t.em), t.name)));
   renderFrame(); renderDoc();
 }
@@ -273,21 +273,28 @@ const isSpCh = c => c === ' ' || c === '　';
 const nsLen = s => [...s].filter(c => !isSpCh(c)).length;
 // ぶんごとの id（ならべかえ・なおし を しても かわらない なまえ）
 const newLineId = () => 'l' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-function docIds() {
-  const p = P();
-  const d = p.docIds, same = Array.isArray(d) && d.length === p.doc.length;
-  if (!(same && d.every(x => typeof x === 'string') && new Set(d).size === d.length)) {
+// id と つくりかたの けいかく（データは かえない）。setDoc は しらべて よい ときだけ たしかめる
+function idPlan(p) {
+  let ids = p.docIds, ls = p.lineSrc || null;
+  const same = Array.isArray(ids) && ids.length === p.doc.length;
+  if (!(same && ids.every(x => typeof x === 'string') && new Set(ids).size === ids.length)) {
     const fresh = p.doc.map(newLineId);
     // ぶんの かずが おなじで id だけ おかしい（かさなった）ときは、つくりかたを あたらしい id に うつす
-    if (same && p.lineSrc) { const ls = {}; d.forEach((x, i) => { if (p.lineSrc[x]) ls[fresh[i]] = clone(p.lineSrc[x]); }); p.lineSrc = ls; }
-    p.docIds = fresh;
+    if (same && ls) { const n = {}; ids.forEach((x, i) => { if (ls[x]) n[fresh[i]] = clone(ls[x]); }); ls = n; }
+    ids = fresh;
   }
-  // ふるい データ（ぶんの もじで おぼえた docSrc）は、いまの ぶんの id へ うつして けす（あとで もどって こない）
+  // ふるい データ（ぶんの もじで おぼえた docSrc）は、いまの ぶんの id へ うつす
   if (p.docSrc) {
-    const ls = p.lineSrc = p.lineSrc || {};
-    p.doc.forEach((s, i) => { const x = p.docSrc[stripConn(s)]; if (x && !ls[p.docIds[i]]) ls[p.docIds[i]] = clone(x); });
-    delete p.docSrc;
+    ls = Object.assign({}, ls);
+    p.doc.forEach((s, i) => { const x = p.docSrc[stripConn(s)]; if (x && !ls[ids[i]]) ls[ids[i]] = clone(x); });
   }
+  return { ids, ls };
+}
+function docIds() {
+  const p = P(), pl = idPlan(p);
+  // うつしたら ふるい docSrc は けす（あとで もどって こない）
+  if (pl.ids !== p.docIds || pl.ls !== (p.lineSrc || null)) { p.docIds = pl.ids; if (pl.ls) p.lineSrc = pl.ls; }
+  delete p.docSrc;
   return p.docIds;
 }
 // ぶんの つくりかた（✏️ なおす で ことばを えらびなおす ため）は ぶんの id で おぼえる（おなじ もじの ぶんでも べつべつ）
@@ -298,7 +305,7 @@ function srcOf(i) { const p = P(), id = docIds()[i]; return (p.lineSrc || {})[id
 // entries：あたらしい じゅんの [{ i: もとの ばんごう（あたらしい ぶんは -1）, body: じゅんじょの ことばを のぞいた ぶん }]
 // how：'keep' そのまま／'conn' つける／'strip' とる。dry：かえずに、きえる てがきの かずだけ かえす
 function setDoc(entries, how, dry) {
-  const p = P(), old = p.doc, n = entries.length, ids = docIds();
+  const p = P(), old = p.doc, n = entries.length, pl = idPlan(p), ids = pl.ids;
   const cutsOn = p.cutsText === old.join('\n') && (p.cuts || []).length;
   const st = [], nst = []; let o = 0, q = 0;
   old.forEach(s => { st.push(o); nst.push(q); o += s.length + 1; q += nsLen(s); });
@@ -321,7 +328,9 @@ function setDoc(entries, how, dry) {
   const h = handChars(), lost = Object.keys(h).filter(k => nmap[k] == null && h[k].s && h[k].s.length).length;
   if (dry) return lost;
   // なかみが かわった ぶん・けした ぶんの つくりかたは わすれる
-  if (p.lineSrc) { const ls = {}; entries.forEach(({ i, body }, j) => { if (i >= 0 && stripConn(old[i]) === body && p.lineSrc[newIds[j]]) ls[newIds[j]] = p.lineSrc[newIds[j]]; }); p.lineSrc = ls; }
+  // ここで はじめて データを かえる（ながすぎて ことわった ときは id・つくりかたも そのまま）
+  if (pl.ls) { const ls = {}; entries.forEach(({ i, body }, j) => { if (i >= 0 && stripConn(old[i]) === body && pl.ls[newIds[j]]) ls[newIds[j]] = pl.ls[newIds[j]]; }); p.lineSrc = ls; }
+  delete p.docSrc;
   p.doc = lines; p.docIds = newIds;
   if (cutsOn) { p.cuts = cuts.sort((a, z) => a - z); p.cutsText = lines.join('\n'); }
   const nh = {};

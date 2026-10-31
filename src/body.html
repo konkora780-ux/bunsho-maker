@@ -223,7 +223,26 @@ nav.steps button.tool.on{background:var(--accent-soft)}
 .rolebtn{border:3px solid var(--pen);box-shadow:0 3px 0 var(--pen)}
 .work,.gcell{border-width:3px}
 .btn:active:not(:disabled),nav.steps button:active,.chip:active,.tpl:active,.mode:active{transform:translateY(3px);box-shadow:0 1px 0 var(--pen)}
-@media (prefers-reduced-motion:reduce){.btn:active,nav.steps button:active,.chip:active,.tpl:active,.mode:active{transform:none}}
+/* ===== 第5回再評価（2026-11-01）：うごきを へらす・えらんでいる しるし・よみやすい いろ・いんさつ ===== */
+/* もじの いろ：しろ もじの あかい おび・みどりの もじを こく（ふつうの もじで 4.5:1 いじょう） */
+:root{--ng:#b83a33;--ok:#1f7a43}
+/* えらんでいる ところ：いろ だけでなく「✓」の シール（おおきさは かわらない：わくの そとがわに かさねる） */
+nav.steps button,.tpl,.mode,.btn{position:relative}
+nav.steps button.on::after,.tpl.on::after,.mode.on::after,.btn.on::after{content:"✓";content:"✓"/"";position:absolute;top:-10px;right:-8px;width:28px;height:28px;display:grid;place-items:center;border-radius:50%;background:#fff;color:var(--ink);border:2px solid var(--pen,#2a2a2a);font-size:17px;font-weight:700;line-height:1;pointer-events:none}
+/* キーボード・スイッチで うごかす ときの わく：しろい ところでも みえる こい わく */
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible,label.btn:focus-within{outline:4px solid var(--pen,#2a2a2a);outline-offset:3px}
+/* うごきを へらす せってい（iPad の「視差効果を減らす」）：おしても しずまない・ゆれない・ひかり つづけない */
+@media (prefers-reduced-motion:reduce){
+  .btn:active:not(:disabled),nav.steps button:active,.chip:active,.tpl:active,.mode:active,.key.hit{transform:none}
+  .key.next{animation:none}
+  .shake{animation:ngflash .4s}
+  .rolebtn .fill{width:100%;opacity:0}
+  .rolebtn.press .fill{opacity:1;transition:opacity 1.2s linear}
+}
+/* まちがえた ときの しらせ（うごかない）：わくが いっしゅん あかく なる */
+@keyframes ngflash{0%,100%{box-shadow:none}30%{box-shadow:0 0 0 5px var(--ng)}}
+/* いんさつ：がめん用の ほうがんと いろを けして しろに する */
+@media print{body{background:#fff!important;background-image:none!important}}
 </style>
 
 <header class="top">
