@@ -43,7 +43,8 @@ test('とおしで うごかす（iPad 6がめん）', async b => {
     while (guard++ < 400) {
       const st = await pg.evaluate(() => ({ done: ty.done, all: ty.done && ty.si >= ty.sents.length - 1, k: ty.done ? null : nextKeyKana() }));
       if (st.all) break;
-      if (st.done) { await pg.locator('#bigNow button', { hasText: 'つぎへ' }).tap(); continue; }
+      // じどうで つぎへ すすむ（0.9びょう）と ボタンが きえる ことが あるので、きえたら そのまま つぎへ
+      if (st.done) { await pg.locator('#bigNow button', { hasText: 'つぎへ' }).tap({ timeout: 3000 }).catch(() => {}); continue; }
       await pg.locator(`#kb .key[data-k="${st.k}"]`).dispatchEvent('pointerdown'); n++;
     }
     const miss = await pg.evaluate(() => ty.miss);
