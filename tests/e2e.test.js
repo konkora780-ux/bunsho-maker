@@ -9,13 +9,9 @@ test('とおしで うごかす（iPad 6がめん）', async b => {
     const ctx = await b.newContext({ viewport: { width: w, height: h }, hasTouch: true, isMobile: true, deviceScaleFactor: 2, acceptDownloads: true,
       userAgent: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' });
     const pg = await ctx.newPage();
-    const errs = [];
-    pg.on('pageerror', e => errs.push('PAGEERR ' + e.message));
-    // そとの フォント（fonts.googleapis.com・fonts.gstatic.com）が よめない ときは、iPad の もじで かわりに でるので しっぱいに しない（まえから おなじ きまり）。
-    // 「Failed to load resource」は もじに URL が はいらない ことが あるので、どこの ものかを location と requestfailed で きろくして わける
-    const isFont = u => /^https:\/\/fonts\.(googleapis|gstatic)\.com\//.test(u || '');
-    pg.on('console', m => { if (m.type() !== 'error') return; const u = (m.location() || {}).url || ''; if (/fonts\.g/.test(m.text()) || isFont(u)) return; errs.push('CONSOLE ' + m.text() + (u ? ' @ ' + u : '')); });
-    pg.on('requestfailed', r => { if (isFont(r.url())) return; errs.push('REQFAIL ' + r.url() + ' ' + ((r.failure() || {}).errorText || '')); });
+    // エラーの あつめかたは helpers.js の errWatch（そとの フォントだけ URL で みわけて しんだんへ。のこりは ぜんぶ しっぱい）
+    const W = H.errWatch(), errs = W.errs;
+    pg.on('pageerror', W.pageerror); pg.on('console', W.console); pg.on('requestfailed', W.requestfailed);
     const ovf = async label => {
       const r = await pg.evaluate(() => {
         const out = [];
@@ -114,6 +110,7 @@ test('とおしで うごかす（iPad 6がめん）', async b => {
     if (vis.length) issues.push(`[${name}] teacher-only visible in student: ${vis.join(',')}`);
     await pg.screenshot({ path: path.join(OUT, `E_${name}_student.png`), fullPage: true });
     errs.forEach(e => issues.push(`[${name}] ${e}`));
+    W.diag.forEach(e => console.log(`  （しんだん・合否には いれない）[${name}] ${e}`));
     await ctx.close();
   }
   if (issues.length) throw new Error(issues.join('\n'));

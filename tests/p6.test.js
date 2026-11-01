@@ -141,3 +141,29 @@ test('6P2-7 いまの みため（あかい おもな ボタン）の しろ も
   ok(ratio(c[0], c[1]) >= 4.5, 'あかい ボタン ' + ratio(c[0], c[1]).toFixed(2) + ' ' + c);
   noErr(pg);
 });
+
+test('6P2-8 とおしの テストの エラーの みわけかた：そとの フォントは URL だけで しんだんへ。アプリの URL の エラーは もじに fonts.g が あっても のこす', async () => {
+  const { errWatch } = require('./helpers');
+  const W = errWatch(), app = 'http://127.0.0.1:1234/index.html';
+  const msg = (text, url) => ({ type: () => 'error', text: () => text, location: () => ({ url }) });
+  const req = (url, why) => ({ url: () => url, failure: () => ({ errorText: why }) });
+  W.console(msg('ほぞんに しっぱい', app));
+  W.console(msg('fonts.googleapis.com の かわりの しょりで ほぞんに しっぱい', app));
+  W.console(msg('fonts.gstatic.com が よめない', ''));
+  W.console(msg('Failed to load resource: net::ERR_ADDRESS_UNREACHABLE', 'https://fonts.gstatic.com/s/zen.woff2'));
+  W.console({ type: () => 'warning', text: () => 'x', location: () => ({ url: app }) });
+  W.requestfailed(req('http://127.0.0.1:1234/missing.js', 'net::ERR_FAILED'));
+  W.requestfailed(req('https://fonts.googleapis.com/css2?family=Zen', 'net::ERR_ADDRESS_UNREACHABLE'));
+  W.requestfailed(req('https://fonts.googleapis.com.example.org/x.css', 'net::ERR_FAILED'));
+  eq(W.errs, [
+    'CONSOLE ほぞんに しっぱい @ ' + app,
+    'CONSOLE fonts.googleapis.com の かわりの しょりで ほぞんに しっぱい @ ' + app,
+    'CONSOLE fonts.gstatic.com が よめない',
+    'REQFAIL http://127.0.0.1:1234/missing.js net::ERR_FAILED',
+    'REQFAIL https://fonts.googleapis.com.example.org/x.css net::ERR_FAILED',
+  ]);
+  eq(W.diag, [
+    'CONSOLE Failed to load resource: net::ERR_ADDRESS_UNREACHABLE @ https://fonts.gstatic.com/s/zen.woff2',
+    'REQFAIL https://fonts.googleapis.com/css2?family=Zen net::ERR_ADDRESS_UNREACHABLE',
+  ]);
+});

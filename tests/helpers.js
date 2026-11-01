@@ -41,4 +41,21 @@ async function run() {
   await browser.close(); server.close();
   return fail;
 }
-module.exports = { test, eq, ok, openPage, run, OUT, get URL_() { return URL; } };
+// がめんの エラーを あつめる（とおしの テスト用）。
+// そとの フォント（fonts.googleapis.com・fonts.gstatic.com）が よめない ときは iPad の もじで かわりに でるので、合否には いれず「しんだん」に URL と りゆうを のこす。
+// それを みわけるのは URL だけ。メッセージの もじに fonts.g が あっても、URL が そとの フォントで なければ エラーと して のこす（URL が わからない ものも のこす）
+const isExtFont = u => /^https:\/\/fonts\.(googleapis|gstatic)\.com\//.test(u || '');
+function errWatch() {
+  const errs = [], diag = [];
+  return {
+    errs, diag,
+    pageerror: e => errs.push('PAGEERR ' + e.message),
+    console: m => {
+      if (m.type() !== 'error') return;
+      const u = (m.location() || {}).url || '', line = 'CONSOLE ' + m.text() + (u ? ' @ ' + u : '');
+      (isExtFont(u) ? diag : errs).push(line);
+    },
+    requestfailed: r => { const line = 'REQFAIL ' + r.url() + ' ' + ((r.failure() || {}).errorText || ''); (isExtFont(r.url()) ? diag : errs).push(line); },
+  };
+}
+module.exports = { test, eq, ok, openPage, run, errWatch, isExtFont, OUT, get URL_() { return URL; } };
