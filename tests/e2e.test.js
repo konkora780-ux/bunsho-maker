@@ -11,7 +11,11 @@ test('とおしで うごかす（iPad 6がめん）', async b => {
     const pg = await ctx.newPage();
     const errs = [];
     pg.on('pageerror', e => errs.push('PAGEERR ' + e.message));
-    pg.on('console', m => { if (m.type() === 'error' && !/fonts\.g/.test(m.text())) errs.push('CONSOLE ' + m.text()); });
+    // そとの フォント（fonts.googleapis.com・fonts.gstatic.com）が よめない ときは、iPad の もじで かわりに でるので しっぱいに しない（まえから おなじ きまり）。
+    // 「Failed to load resource」は もじに URL が はいらない ことが あるので、どこの ものかを location と requestfailed で きろくして わける
+    const isFont = u => /^https:\/\/fonts\.(googleapis|gstatic)\.com\//.test(u || '');
+    pg.on('console', m => { if (m.type() !== 'error') return; const u = (m.location() || {}).url || ''; if (/fonts\.g/.test(m.text()) || isFont(u)) return; errs.push('CONSOLE ' + m.text() + (u ? ' @ ' + u : '')); });
+    pg.on('requestfailed', r => { if (isFont(r.url())) return; errs.push('REQFAIL ' + r.url() + ' ' + ((r.failure() || {}).errorText || '')); });
     const ovf = async label => {
       const r = await pg.evaluate(() => {
         const out = [];

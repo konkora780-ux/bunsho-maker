@@ -59,11 +59,21 @@ test('6P2-4b ✓ の ほんとうの ばしょで しらべる：375・600・768
     const same = await pg.evaluate(() => { show('make'); const ts = $$('.tpl'), on = $('.tpl.on'), other = ts.find(x => x !== on); const k = x => { const q = x.querySelector('.em') || x; const r = x.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height), Math.round(q.getBoundingClientRect().left - r.left)]; }; const a = k(other); other.click(); const n = $$('.tpl').find(x => x.textContent === other.textContent); return [a, k(n)]; });
     eq(same[0], same[1], w + 'px えらぶ まえと あと');
     if (w === 600) {
-      // Tab で べつの かたへ フォーカスを うごかしても、えらんでいる ✓ は のこる
-      let f = null;
-      for (let i = 0; i < 60 && !f; i++) { await pg.keyboard.press('Tab'); f = await pg.evaluate(() => { const a = document.activeElement; return a.classList.contains('tpl') && !a.classList.contains('on') ? [getComputedStyle(a).outlineWidth, getComputedStyle(a).outlineStyle] : null; }); }
-      eq(f, ['4px', 'solid'], 'えらんでいない かたに フォーカス');
-      eq(await pg.evaluate(src => { const m = eval(src)(); const t = $('.tpl.on'); return [/✓/.test(getComputedStyle(t, '::after').content), t !== document.activeElement]; }, `(${mark})`), [true, true]);
+      // (1) キーボードで じゅんに うごかす：ふつうの Tab で、えらんでいない かたに とどくか。
+      //     Mac の WebKit では、Mac の せってい（キーボード ナビゲーション）に よって Tab が ボタンを とばす ことが ある。
+      //     その ときは Option+Tab（Alt+Tab）で ためし、どちらで とどいたかを きろくする（ボタンの tabindex は かえない）
+      const reach = async key => { for (let i = 0; i < 60; i++) { await pg.keyboard.press(key); if (await pg.evaluate(() => { const a = document.activeElement; return a.classList.contains('tpl') && !a.classList.contains('on'); })) return true; } return false; };
+      let how = 'Tab', got = await reach('Tab');
+      if (!got) { how = 'Alt+Tab'; got = await reach('Alt+Tab'); }
+      if (process.env.SHOW || how !== 'Tab') console.log('  （6P2-4b：えらんでいない かたへ ' + how + ' で とどいた・' + process.platform + '）');
+      ok(got, 'Tab でも Option+Tab でも、えらんでいない かたに とどかない');
+      // (2) フォーカスの わくの CSS：キーボードを つかった あとで、えらんでいない かたに フォーカス → こい 4px の わく。えらんでいる かたの ✓ は のこる
+      const fv = await pg.evaluate(src => {
+        const other = $$('.tpl').find(x => !x.classList.contains('on')); other.focus();
+        const s = getComputedStyle(other), t = $('.tpl.on');
+        return [other.matches(':focus-visible'), s.outlineWidth, s.outlineStyle, /✓/.test(getComputedStyle(t, '::after').content), t !== document.activeElement];
+      }, `(${mark})`);
+      eq(fv, [true, '4px', 'solid', true, true], 'えらんでいない かたの フォーカスの わく');
     }
     noErr(pg);
   }
