@@ -149,7 +149,7 @@ npm run test:quick   # 通しテストをとばした速いテスト
 
 - `tests/features.test.js`：機能ごとのテスト（文末の変化、並べかえ、写真など）
 - `tests/stage1.test.js`：保存と復元、作品の見た目固定、表示設定、文の扱い、入力と学習、iPad操作、まとめPDFのテスト
-- `tests/p1.test.js`〜`tests/p6.test.js`・`tests/p7.test.js`（漢字を打てない）・`tests/p8.test.js`（カタカナ・キーボードの並び・数字）・`tests/p9.test.js`（第11回：手書きを守る・作品の文字・分かれた濁点・古い漢字）・`tests/p10.test.js`（第12回：取り消し・2つで1文字の漢字・くとうてん）：チャッピーの再評価ごとの確認（第5回・第6回は、動きを減らす設定・選んでいる印・色の比・印刷・断ったときに何も変えないこと など）
+- `tests/p1.test.js`〜`tests/p6.test.js`・`tests/p7.test.js`（漢字を打てない）・`tests/p8.test.js`（カタカナ・キーボードの並び・数字）・`tests/p9.test.js`（第11回：手書きを守る・作品の文字・分かれた濁点・古い漢字）・`tests/p10.test.js`（第12回：取り消し・2つで1文字の漢字・くとうてん）・`tests/p11.test.js`（第13回：離れて戻る・30こ超の取り消し）：チャッピーの再評価ごとの確認（第5回・第6回は、動きを減らす設定・選んでいる印・色の比・印刷・断ったときに何も変えないこと など）
 - `tests/e2e.test.js`：iPad の6つの画面サイズで①〜③を通しで操作し、はみ出しやエラーがないか確かめる。画面の写真と PDF は `tests/out/` にできます。
 - テストは小さなサーバー（`http://127.0.0.1`）で配信して行います。`BROWSER=webkit npm test` で Safari と同じエンジン（WebKit）でも試せます（先に `npx playwright install webkit`）。
 - GitHub に送ると、`.github/workflows/test.yml` が Chromium と WebKit で自動テストします。結果はリポジトリの「Actions」タブで見られます。
