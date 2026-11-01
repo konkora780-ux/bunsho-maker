@@ -55,7 +55,7 @@ $('#optRomaji').addEventListener('change', e => { S().romaji = e.target.value; s
 $('#optCase').addEventListener('change', e => { S().keyCase = e.target.value; saveDB(); });
 $('#optSpeakPick').addEventListener('change', e => { S().speakPick = e.target.checked; saveDB(); });
 // もじ（ひらがな／カタカナ）：なかみは ひらがなの まま なので、きりかえても ぶん・ことば・てがきは きえない
-$('#optScript').addEventListener('change', e => { S().script = e.target.value === 'kata' ? 'kata' : 'hira'; if (saveDB()) toast(KATA() ? 'カタカナに しました' : 'ひらがなに しました'); });
+$('#optScript').addEventListener('change', e => { if (handLocked()) { e.target.value = KATA() ? 'kata' : 'hira'; return toast(HAND_LOCK_MSG); } S().script = e.target.value === 'kata' ? 'kata' : 'hira'; if (saveDB()) toast(KATA() ? 'カタカナに しました' : 'ひらがなに しました'); });
 $('#optScriptKey').addEventListener('change', e => { S().scriptKey = e.target.checked; saveDB(); });
 $('#btnProfRename').addEventListener('click', () => { const n = $('#profName').value.trim(); if (!n) return; P().name = n; renderWho(); if (saveDB()) toast('かえました'); });
 $('#btnProfAdd').addEventListener('click', () => {
@@ -158,7 +158,7 @@ function cleanFin(v) {
 // ひらいた さくひんの「その ときの もじ・なまえ」
 function cleanSnap(v) {
   const o = obj(v); if (typeof o.text !== 'string') return null;
-  return { id: str(o.id, 40), text: str(o.text, LIM.text, '', 'ひらいた さくひんの ぶん'), nameText: str(o.nameText, 30, '', 'なまえ'), glyphs: o.glyphs ? cleanGlyphs(o.glyphs) : null };
+  return { id: str(o.id, 40), text: str(o.text, LIM.text, '', 'ひらいた さくひんの ぶん'), title: str(o.title, 60, '', 'だい'), nameText: str(o.nameText, 30, '', 'なまえ'), glyphs: o.glyphs ? cleanGlyphs(o.glyphs) : null };
 }
 function cleanWork(v) {
   const o = obj(v); if (typeof o.text !== 'string' || !o.text) return null;

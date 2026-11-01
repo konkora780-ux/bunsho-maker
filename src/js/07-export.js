@@ -234,7 +234,7 @@ function openWork(w) {
   fin.title = kata2hira(fin.title || '');
   fin.page = 0; fin.hi = 0;
   // ほぞんした ときの もじ・なまえで ひらく（ぶんしょうを かえるまで）
-  fin.snap = { id: w.id, text: w.text, nameText: w.nameText || P().name, glyphs: w.glyphs ? clone(w.glyphs) : null };
+  fin.snap = { id: w.id, text: w.text, title: typeof w.title === 'string' ? w.title : '', nameText: w.nameText || P().name, glyphs: w.glyphs ? clone(w.glyphs) : null };
   P().hand = w.hand && !Array.isArray(w.hand) ? clone(w.hand) : {};
   if (!saveDB()) { putState(before); if (oldDraft) P().draft = oldDraft; else delete P().draft; renderFinish(); return toast('ほぞんする ばしょが たりず、ひらけませんでした'); }
   renderFinish(); window.scrollTo(0, 0); toast(P().draft === before ? 'ひらきました（まえの ないようは したがきに のこしました）' : 'ひらきました');

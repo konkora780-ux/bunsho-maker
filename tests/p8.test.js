@@ -25,7 +25,7 @@ test('8-1 せんせいが カタカナに すると、ことば・ぶん・し�
   noErr(pg);
 });
 
-test('8-2 らんの もじが その ひとの もじに そろう（ひらがな⇔カタカナ）。なまえは そろえない', async b => {
+test('8-2 らんの もじが その ひとの もじに そろう（ひらがな⇔カタカナ）。なまえも そろえる', async b => {
   const pg = await openPage(b);
   await pg.evaluate(() => { S().script = 'kata'; mk = P().mk = { tpl: 'jiyu', vals: {}, active: null, free: '' }; show('make'); });
   await pg.locator('#freeText').fill('ぼーる 3こ！');
@@ -34,8 +34,8 @@ test('8-2 らんの もじが その ひとの もじに そろう（ひらが�
   await pg.locator('#freeText').fill('ボールABC@#');
   eq(await pg.evaluate(() => $('#freeText').value), 'ぼーる');
   await pg.evaluate(() => { S().script = 'kata'; show('setting'); });
-  await pg.locator('#profName').fill('こんちゃん');
-  eq(await pg.evaluate(() => $('#profName').value), 'こんちゃん');
+  await pg.locator('#profName').fill('こんちゃん２０');
+  eq(await pg.evaluate(() => $('#profName').value), 'コンチャン20');
   // ぜんかくの すうじは はんかくに
   eq(await pg.evaluate(() => normText('２０２６ねん')), '2026ねん');
   // バックアップで のこる・へんな あたいは もどる
@@ -84,7 +84,7 @@ test('8-4 もじとうろく：ひらがな・カタカナ・すうじ ぜんぶ
     return { first: rows[0], hira: rows.includes('あいうえお'), num: rows.find(r => /^0/.test(r)), need: neededGlyphs().join(''), prog: $('#glyphProg').textContent };
   });
   eq([r.first, r.num, r.need, r.hira], ['アイウエオ', '0123456789', '206ネン', true]);
-  ok(/\/ 179/.test(r.prog), r.prog);
+  ok(/\/ 181/.test(r.prog), r.prog);
   // すうじを とうろく → しあげで その もじが つかわれる（たりない もじに でない）
   const miss = await pg.evaluate(async () => {
     const st = [[[0.2, 0.2], [0.8, 0.8]]];

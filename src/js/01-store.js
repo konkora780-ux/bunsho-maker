@@ -25,30 +25,50 @@ const KATA = () => S().script === 'kata';
 // みせる もじ：カタカナの ひとは カタカナ、ひらがなの ひとは ひらがな（どちらか だけ）
 const dsp = s => KATA() ? hira2kata(s) : kata2hira(s);
 // ぜんかくの すうじ（０〜９）は はんかく（0〜9）に そろえる（もじとうろく・②の キーと おなじ もじ）
-const normText = s => kata2hira(s).replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/!/g, '！').replace(/\?/g, '？').replace(/,/g, '、').replace(/\./g, '。');
-// ぶん・ことば・だいに なる らん（じゆうに かく・ぶんしょうを なおす・せんせいが たす ことば・だい）と なまえの らんでは、かんじを とりのぞいて しらせる。
-// ぶん・ことば・だいの らんは、その ひとの もじ（ひらがな／カタカナ）に そろえる（なまえは そろえない）。
-// にほんごの へんかんの とちゅう（isComposing）は さわらず、きまった あとに なおす。まえから ある データの かんじは けさない
+const halfNum = s => s.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+// ばらばらの だくてん（カ＋゛）は 1もじ（ガ）に まとめる（NFC）
+const normText = s => halfNum(kata2hira(s.normalize('NFC'))).replace(/!/g, '！').replace(/\?/g, '？').replace(/,/g, '、').replace(/\./g, '。');
+// ぶん・ことば・だい・なまえに なる らん（じゆうに かく・ぶんしょうを なおす・せんせいが たす ことば・だい・なまえ）では、
+// あたらしく いれた もじの うち つかえない もじ（かんじ・ABC など）を とりのぞいて しらせ、その ひとの もじ（ひらがな／カタカナ）と はんかくの すうじに そろえる。
+// にほんごの へんかんの とちゅう（isComposing）は さわらず、きまった あとに なおす。
+// まえから ある もじ（ふるい データの かんじ など）は、ほかの ところを なおしても けさない（あたらしく はいった ところ だけ しらべる）
 const KANA_ONLY = '#freeText,#docEdit,#optTitle,#profName,[data-kana]';
-const SCRIPT_FIELD = '#freeText,#docEdit,#optTitle,[data-kana]';
-// つかえる もじ：ひらがな・カタカナ・すうじ と くとうてんなど（、。ー！？「」・くうはく・かいぎょう）。かんじ・ABC・ほかの きごうは とる
-const NOT_OK = /[^\u3041-\u3096\u30A1-\u30F6ー0-9０-９、。，．,.！？!?「」 　\n]/gu;
+// つかえる もじ：もじとうろく できる もじ（ひらがな・カタカナ・すうじ・、。ー！？「」）と くとうてんの かわり（，．,.!?）・くうはく・かいぎょう
+const NOT_OK = /[^\u3041-\u3094\u30A1-\u30F4ー0-9０-９、。，．,.！？!?「」 　\n]|[ゐゑヰヱ]/gu;
 const stripKanji = s => s.replace(NOT_OK, '');
+const fieldConv = s => halfNum(dsp(s));
 let kanjiToastAt = 0;
+// かわる まえの なかみ（beforeinput・へんかんの はじまり）。ないときは まえに なおした なかみ
+function markPre(e) { const t = e.target; if (!t.matches || !t.matches(KANA_ONLY)) return; if (e.type === 'compositionstart') { t._comp = true; t._pre = t.value; } else if (!t._comp && !e.isComposing) t._pre = t.value; }
 function dropKanji(e) {
   const t = e.target;
   if (!t.matches || !t.matches(KANA_ONLY) || (e.type === 'input' && e.isComposing)) return;
-  const v = t.value, conv = t.matches(SCRIPT_FIELD) ? dsp : (x => x), nv = conv(stripKanji(v));
-  if (nv === v) return;
-  // カーソルの まえで けした かずだけ もどす（ひらがな⇔カタカナは おなじ ながさ）
-  const at = t.selectionStart == null ? nv.length : stripKanji(v.slice(0, t.selectionStart)).length;
-  const hadKanji = stripKanji(v) !== v;
+  if (e.type === 'compositionend') t._comp = false;
+  const v0 = t.value, v = v0.normalize('NFC'), prev = (t._pre != null ? t._pre : t._ok != null ? t._ok : '').normalize('NFC');
+  t._pre = null;
+  // あたらしく はいった ところ（まえと おなじ はじめ・おわりを のぞいた まんなか）
+  let pre = 0; while (pre < v.length && pre < prev.length && v[pre] === prev[pre]) pre++;
+  let suf = 0; while (suf < v.length - pre && suf < prev.length - pre && v[v.length - 1 - suf] === prev[prev.length - 1 - suf]) suf++;
+  const mid = v.slice(pre, v.length - suf), cm = stripKanji(mid);
+  const nv = fieldConv(v.slice(0, pre) + cm + v.slice(v.length - suf));
+  t._ok = nv;
+  if (nv === v0) return;
+  // カーソル：けした かずだけ もどす（ひらがな⇔カタカナ・はんかくの すうじは おなじ ながさ）
+  let at = nv.length;
+  if (t.selectionStart != null) {
+    const c = v0.slice(0, t.selectionStart).normalize('NFC').length;
+    at = c <= pre ? c : c >= v.length - suf ? c - (mid.length - cm.length) : pre + stripKanji(v.slice(pre, c)).length;
+  }
   t.value = nv;
   try { t.setSelectionRange(at, at); } catch (_) {}
-  if (hadKanji && Date.now() - kanjiToastAt > 2500) { kanjiToastAt = Date.now(); toast(`かんじや ABC は つかえません。${KATA() && conv === dsp ? 'カタカナ' : 'ひらがな'}・すうじで うってね`); }
+  if (cm !== mid && Date.now() - kanjiToastAt > 2500) { kanjiToastAt = Date.now(); toast(`かんじや ABC は つかえません。${KATA() ? 'カタカナ' : 'ひらがな'}・すうじで うってね`); }
   // へんかんが おわった ときは、アプリの ほうにも あたらしい なかみを しらせる
   if (e.type === 'compositionend') t.dispatchEvent(new Event('input', { bubbles: true }));
 }
+// フォーカスした ときの なかみを「まえ」に する（アプリが いれた なかみ）
+document.addEventListener('focusin', e => { const t = e.target; if (t.matches && t.matches(KANA_ONLY)) t._ok = t.value; }, true);
+document.addEventListener('beforeinput', markPre, true);
+document.addEventListener('compositionstart', markPre, true);
 // とらえる だんかい（capture）で さきに なおすので、それぞれの らんの しょりは なおした なかみを うけとる
 document.addEventListener('input', dropKanji, true);
 document.addEventListener('compositionend', dropKanji, true);

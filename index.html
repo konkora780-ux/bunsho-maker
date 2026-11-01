@@ -119,7 +119,8 @@ textarea.edit{width:100%;min-height:110px;padding:10px;border-radius:12px;border
 .kcol.side .key.fn.on{background:#5b6570;color:#fff}
 .kcol.side .sm{display:none}
 .kcol.side .key.fn{white-space:nowrap;letter-spacing:0}
-@media (max-width:900px){.kcol.side .key.fn{font-size:11px}}
+.kcol.side{flex:1.35 1 0;max-width:104px}
+@media (max-width:900px){.kcol.side .key.fn{font-size:13px}}
 @media (max-width:600px){.kcol.side .lg{display:none}.kcol.side .sm{display:inline}.kcol.side .key.fn{font-size:12px}}
 .key.miss{background:#ffd3d0}
 .key.hit{transform:translateY(2px);box-shadow:none}
@@ -535,30 +536,50 @@ const KATA = () => S().script === 'kata';
 // みせる もじ：カタカナの ひとは カタカナ、ひらがなの ひとは ひらがな（どちらか だけ）
 const dsp = s => KATA() ? hira2kata(s) : kata2hira(s);
 // ぜんかくの すうじ（０〜９）は はんかく（0〜9）に そろえる（もじとうろく・②の キーと おなじ もじ）
-const normText = s => kata2hira(s).replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/!/g, '！').replace(/\?/g, '？').replace(/,/g, '、').replace(/\./g, '。');
-// ぶん・ことば・だいに なる らん（じゆうに かく・ぶんしょうを なおす・せんせいが たす ことば・だい）と なまえの らんでは、かんじを とりのぞいて しらせる。
-// ぶん・ことば・だいの らんは、その ひとの もじ（ひらがな／カタカナ）に そろえる（なまえは そろえない）。
-// にほんごの へんかんの とちゅう（isComposing）は さわらず、きまった あとに なおす。まえから ある データの かんじは けさない
+const halfNum = s => s.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+// ばらばらの だくてん（カ＋゛）は 1もじ（ガ）に まとめる（NFC）
+const normText = s => halfNum(kata2hira(s.normalize('NFC'))).replace(/!/g, '！').replace(/\?/g, '？').replace(/,/g, '、').replace(/\./g, '。');
+// ぶん・ことば・だい・なまえに なる らん（じゆうに かく・ぶんしょうを なおす・せんせいが たす ことば・だい・なまえ）では、
+// あたらしく いれた もじの うち つかえない もじ（かんじ・ABC など）を とりのぞいて しらせ、その ひとの もじ（ひらがな／カタカナ）と はんかくの すうじに そろえる。
+// にほんごの へんかんの とちゅう（isComposing）は さわらず、きまった あとに なおす。
+// まえから ある もじ（ふるい データの かんじ など）は、ほかの ところを なおしても けさない（あたらしく はいった ところ だけ しらべる）
 const KANA_ONLY = '#freeText,#docEdit,#optTitle,#profName,[data-kana]';
-const SCRIPT_FIELD = '#freeText,#docEdit,#optTitle,[data-kana]';
-// つかえる もじ：ひらがな・カタカナ・すうじ と くとうてんなど（、。ー！？「」・くうはく・かいぎょう）。かんじ・ABC・ほかの きごうは とる
-const NOT_OK = /[^\u3041-\u3096\u30A1-\u30F6ー0-9０-９、。，．,.！？!?「」 　\n]/gu;
+// つかえる もじ：もじとうろく できる もじ（ひらがな・カタカナ・すうじ・、。ー！？「」）と くとうてんの かわり（，．,.!?）・くうはく・かいぎょう
+const NOT_OK = /[^\u3041-\u3094\u30A1-\u30F4ー0-9０-９、。，．,.！？!?「」 　\n]|[ゐゑヰヱ]/gu;
 const stripKanji = s => s.replace(NOT_OK, '');
+const fieldConv = s => halfNum(dsp(s));
 let kanjiToastAt = 0;
+// かわる まえの なかみ（beforeinput・へんかんの はじまり）。ないときは まえに なおした なかみ
+function markPre(e) { const t = e.target; if (!t.matches || !t.matches(KANA_ONLY)) return; if (e.type === 'compositionstart') { t._comp = true; t._pre = t.value; } else if (!t._comp && !e.isComposing) t._pre = t.value; }
 function dropKanji(e) {
   const t = e.target;
   if (!t.matches || !t.matches(KANA_ONLY) || (e.type === 'input' && e.isComposing)) return;
-  const v = t.value, conv = t.matches(SCRIPT_FIELD) ? dsp : (x => x), nv = conv(stripKanji(v));
-  if (nv === v) return;
-  // カーソルの まえで けした かずだけ もどす（ひらがな⇔カタカナは おなじ ながさ）
-  const at = t.selectionStart == null ? nv.length : stripKanji(v.slice(0, t.selectionStart)).length;
-  const hadKanji = stripKanji(v) !== v;
+  if (e.type === 'compositionend') t._comp = false;
+  const v0 = t.value, v = v0.normalize('NFC'), prev = (t._pre != null ? t._pre : t._ok != null ? t._ok : '').normalize('NFC');
+  t._pre = null;
+  // あたらしく はいった ところ（まえと おなじ はじめ・おわりを のぞいた まんなか）
+  let pre = 0; while (pre < v.length && pre < prev.length && v[pre] === prev[pre]) pre++;
+  let suf = 0; while (suf < v.length - pre && suf < prev.length - pre && v[v.length - 1 - suf] === prev[prev.length - 1 - suf]) suf++;
+  const mid = v.slice(pre, v.length - suf), cm = stripKanji(mid);
+  const nv = fieldConv(v.slice(0, pre) + cm + v.slice(v.length - suf));
+  t._ok = nv;
+  if (nv === v0) return;
+  // カーソル：けした かずだけ もどす（ひらがな⇔カタカナ・はんかくの すうじは おなじ ながさ）
+  let at = nv.length;
+  if (t.selectionStart != null) {
+    const c = v0.slice(0, t.selectionStart).normalize('NFC').length;
+    at = c <= pre ? c : c >= v.length - suf ? c - (mid.length - cm.length) : pre + stripKanji(v.slice(pre, c)).length;
+  }
   t.value = nv;
   try { t.setSelectionRange(at, at); } catch (_) {}
-  if (hadKanji && Date.now() - kanjiToastAt > 2500) { kanjiToastAt = Date.now(); toast(`かんじや ABC は つかえません。${KATA() && conv === dsp ? 'カタカナ' : 'ひらがな'}・すうじで うってね`); }
+  if (cm !== mid && Date.now() - kanjiToastAt > 2500) { kanjiToastAt = Date.now(); toast(`かんじや ABC は つかえません。${KATA() ? 'カタカナ' : 'ひらがな'}・すうじで うってね`); }
   // へんかんが おわった ときは、アプリの ほうにも あたらしい なかみを しらせる
   if (e.type === 'compositionend') t.dispatchEvent(new Event('input', { bubbles: true }));
 }
+// フォーカスした ときの なかみを「まえ」に する（アプリが いれた なかみ）
+document.addEventListener('focusin', e => { const t = e.target; if (t.matches && t.matches(KANA_ONLY)) t._ok = t.value; }, true);
+document.addEventListener('beforeinput', markPre, true);
+document.addEventListener('compositionstart', markPre, true);
 // とらえる だんかい（capture）で さきに なおすので、それぞれの らんの しょりは なおした なかみを うけとる
 document.addEventListener('input', dropKanji, true);
 document.addEventListener('compositionend', dropKanji, true);
@@ -1385,7 +1406,7 @@ const keyLabel = k => k === 'SCRIPT' ? 'あ⇄ア' : KEY_SHOW[k] || (S().keyCase
 // ひらがな⇔カタカナの きりかえキー（せんせいが「だす」に した とき）。おすと その ひとの もじが かわる（ぶんしょうは きえない）
 const scriptKeyOn = () => S().scriptKey !== false;
 const SCRIPT_ARIA = 'ひらがな と カタカナを きりかえる';
-function toggleScript() { S().script = KATA() ? 'hira' : 'kata'; saveDB(); toast(KATA() ? 'カタカナに しました' : 'ひらがなに しました'); if (ty) { renderTarget(); renderBig(); } renderKB(); }
+function toggleScript() { if (handLocked()) return toast(HAND_LOCK_MSG); S().script = KATA() ? 'hira' : 'kata'; saveDB(); toast(KATA() ? 'カタカナに しました' : 'ひらがなに しました'); if (ty) { renderTarget(); renderBig(); } renderKB(); }
 // キーを つくりなおしても、フォーカス（スイッチ・キーボード そうさ）を おなじ キーに もどす
 function renderKB() {
   const a = document.activeElement, fk = a && a.closest && a.closest('#kb') ? a.dataset.k : null;
@@ -1842,8 +1863,12 @@ async function renderPages(o, text, hand, scale, onPage) {
 }
 async function ensureFont(fam) { try { await document.fonts.load(`40px ${fam}`, 'あ'); } catch (e) {} }
 
-// しあげの もじ：なかの ひらがなを、その ひとの もじ（ひらがな／カタカナ）に して だす（てがきの ばしょは もじの かずが おなじ なので ずれない）
-function finText() { return dsp(P().doc.join('\n')); }
+// しあげの もじ：なかの ひらがなを、その ひとの もじ（ひらがな／カタカナ）に して だす（てがきの ばしょは もじの かずが おなじ なので ずれない）。
+// ひらいた さくひんは、ほぞんした ときの もじ（ひらがな／カタカナ）の まま だす
+function finText() { const s = finSnap(); return s ? s.text : dsp(P().doc.join('\n')); }
+// てがきした もじが あるか（ある あいだは ひらがな⇔カタカナを かえない。てがきの せんは その もじの かたち なので）
+function handLocked() { const h = P().hand; return Array.isArray(h) ? h.length > 0 : Object.values(h || {}).some(x => x && x.s && x.s.length); }
+const HAND_LOCK_MSG = '③で てがきした もじが あるので、ひらがな／カタカナは かえられません（てがきを まもる ため）。せんせいに きいてね';
 // てがき：ますの ばんごう → { ch: もじ, s: せん }
 function handChars() { if (!P().hand || Array.isArray(P().hand)) P().hand = {}; return P().hand; }
 let sheetGeomNow = null, sheetXf = null;
@@ -1870,12 +1895,14 @@ async function drawFinish() {
   $('#snapRow').hidden = !finSnap();
 }
 // ひらいた さくひんの「ほぞんした ときの もじ・なまえ」。ぶんしょうが かわったら（あたらしい さくひん）つかわない
-function finSnap() { const s = fin.snap; if (s && s.text !== finText()) delete fin.snap; return fin.snap || null; }
+// くらべるのは なかの もじ（ひらがな）どうし。いまの せっていと ちがう もじで ほぞんした さくひんでも、ひらいた だけでは はずさない
+function finSnap() { const s = fin.snap; if (s && kata2hira(s.text) !== P().doc.join('\n')) delete fin.snap; return fin.snap || null; }
 function finO() {
   // だい・なまえも その ひとの もじで だす（fin そのものは かえない）
   const s = finSnap(), o = Object.assign({}, fin, { title: dsp(fin.title || ''), nameText: dsp(P().name) });
   if (!s) return o;
-  // ほぞんした ときに なかった もじは、あとで とうろくしても まぜない（いちらん・PDF と おなじ みえかた）
+  // ほぞんした ときに なかった もじは、あとで とうろくしても まぜない（いちらん・PDF と おなじ みえかた）。だいは なおして いなければ ほぞんした ときの もじ
+  if (typeof s.title === 'string' && kata2hira(s.title) === (fin.title || '')) o.title = s.title;
   return Object.assign(o, { nameText: s.nameText, glyphs: s.glyphs || undefined });
 }
 function renderFinish() {
@@ -1896,7 +1923,7 @@ function renderFinish() {
   [['#optUse', 'use'], ['#optPaper', 'paper'], ['#optDir', 'dir'], ['#optCols', 'cols'], ['#optRows', 'rows'], ['#optGstyle', 'gstyle'], ['#optSize', 'size'], ['#optFont', 'font'], ['#optWeight', 'weight']]
     .forEach(([s, k]) => { $(s).value = String(fin[k]); });
   $('#optName').checked = fin.name; $('#optSentBreak').checked = fin.sentBreak !== false;
-  $('#optTitle').value = dsp(fin.title || '');
+  $('#optTitle').value = finO().title;
   $('#optModel').checked = fin.model; $('#optPenOnly').checked = fin.penOnly;
   $('#btnBrMode').classList.toggle('on', brMode); $('#btnBrMode').setAttribute('aria-pressed', brMode ? 'true' : 'false');
   $('#brHint').hidden = !brMode;
@@ -1973,7 +2000,8 @@ function paintPad(live) {
 function savePad() {
   const cells = handCells(); const cell = cells[fin.hi]; if (!cell) return;
   if (padStrokes.length) handChars()[fin.hi] = { ch: cell.ch, s: padStrokes.map(s => s.slice()) };
-  else delete handChars()[fin.hi];
+  // ちがう もじの てがき（かいて いない わく）は、ひらいて とじた だけでは けさない
+  else { const old = handChars()[fin.hi]; if (!old || old.ch === cell.ch) delete handChars()[fin.hi]; }
   saveDB(); drawFinish();
 }
 (() => { const cv = $('#handPad'); cv.width = PADN * 2; cv.height = PADN * 2; })();
@@ -2279,7 +2307,7 @@ function openWork(w) {
   fin.title = kata2hira(fin.title || '');
   fin.page = 0; fin.hi = 0;
   // ほぞんした ときの もじ・なまえで ひらく（ぶんしょうを かえるまで）
-  fin.snap = { id: w.id, text: w.text, nameText: w.nameText || P().name, glyphs: w.glyphs ? clone(w.glyphs) : null };
+  fin.snap = { id: w.id, text: w.text, title: typeof w.title === 'string' ? w.title : '', nameText: w.nameText || P().name, glyphs: w.glyphs ? clone(w.glyphs) : null };
   P().hand = w.hand && !Array.isArray(w.hand) ? clone(w.hand) : {};
   if (!saveDB()) { putState(before); if (oldDraft) P().draft = oldDraft; else delete P().draft; renderFinish(); return toast('ほぞんする ばしょが たりず、ひらけませんでした'); }
   renderFinish(); window.scrollTo(0, 0); toast(P().draft === before ? 'ひらきました（まえの ないようは したがきに のこしました）' : 'ひらきました');
@@ -2298,7 +2326,7 @@ $('#btnDraft').addEventListener('click', restoreDraft);
 // ===== もじとうろく =====
 const GLYPH_HIRA = ['あいうえお', 'かきくけこ', 'さしすせそ', 'たちつてと', 'なにぬねの', 'はひふへほ', 'まみむめも', 'やゆよ', 'らりるれろ', 'わをん',
   'がぎぐげご', 'ざじずぜぞ', 'だぢづでど', 'ばびぶべぼ', 'ぱぴぷぺぽ', 'ゔ', 'ぁぃぅぇぉ', 'ゃゅょっゎ'];
-const GLYPH_MARKS = '、。ー！？';
+const GLYPH_MARKS = '、。ー！？「」';
 // すうじ（ひらがな・カタカナ どちらでも おなじ）。ならべれば なんけたでも かける
 const GLYPH_NUM = '0123456789';
 // ひらがな・カタカナ・すうじ ぜんぶ とうろく できる。その ひとの もじの ならびを さきに だす
@@ -2456,7 +2484,7 @@ $('#optRomaji').addEventListener('change', e => { S().romaji = e.target.value; s
 $('#optCase').addEventListener('change', e => { S().keyCase = e.target.value; saveDB(); });
 $('#optSpeakPick').addEventListener('change', e => { S().speakPick = e.target.checked; saveDB(); });
 // もじ（ひらがな／カタカナ）：なかみは ひらがなの まま なので、きりかえても ぶん・ことば・てがきは きえない
-$('#optScript').addEventListener('change', e => { S().script = e.target.value === 'kata' ? 'kata' : 'hira'; if (saveDB()) toast(KATA() ? 'カタカナに しました' : 'ひらがなに しました'); });
+$('#optScript').addEventListener('change', e => { if (handLocked()) { e.target.value = KATA() ? 'kata' : 'hira'; return toast(HAND_LOCK_MSG); } S().script = e.target.value === 'kata' ? 'kata' : 'hira'; if (saveDB()) toast(KATA() ? 'カタカナに しました' : 'ひらがなに しました'); });
 $('#optScriptKey').addEventListener('change', e => { S().scriptKey = e.target.checked; saveDB(); });
 $('#btnProfRename').addEventListener('click', () => { const n = $('#profName').value.trim(); if (!n) return; P().name = n; renderWho(); if (saveDB()) toast('かえました'); });
 $('#btnProfAdd').addEventListener('click', () => {
@@ -2559,7 +2587,7 @@ function cleanFin(v) {
 // ひらいた さくひんの「その ときの もじ・なまえ」
 function cleanSnap(v) {
   const o = obj(v); if (typeof o.text !== 'string') return null;
-  return { id: str(o.id, 40), text: str(o.text, LIM.text, '', 'ひらいた さくひんの ぶん'), nameText: str(o.nameText, 30, '', 'なまえ'), glyphs: o.glyphs ? cleanGlyphs(o.glyphs) : null };
+  return { id: str(o.id, 40), text: str(o.text, LIM.text, '', 'ひらいた さくひんの ぶん'), title: str(o.title, 60, '', 'だい'), nameText: str(o.nameText, 30, '', 'なまえ'), glyphs: o.glyphs ? cleanGlyphs(o.glyphs) : null };
 }
 function cleanWork(v) {
   const o = obj(v); if (typeof o.text !== 'string' || !o.text) return null;

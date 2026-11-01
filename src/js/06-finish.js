@@ -189,8 +189,12 @@ async function renderPages(o, text, hand, scale, onPage) {
 }
 async function ensureFont(fam) { try { await document.fonts.load(`40px ${fam}`, 'あ'); } catch (e) {} }
 
-// しあげの もじ：なかの ひらがなを、その ひとの もじ（ひらがな／カタカナ）に して だす（てがきの ばしょは もじの かずが おなじ なので ずれない）
-function finText() { return dsp(P().doc.join('\n')); }
+// しあげの もじ：なかの ひらがなを、その ひとの もじ（ひらがな／カタカナ）に して だす（てがきの ばしょは もじの かずが おなじ なので ずれない）。
+// ひらいた さくひんは、ほぞんした ときの もじ（ひらがな／カタカナ）の まま だす
+function finText() { const s = finSnap(); return s ? s.text : dsp(P().doc.join('\n')); }
+// てがきした もじが あるか（ある あいだは ひらがな⇔カタカナを かえない。てがきの せんは その もじの かたち なので）
+function handLocked() { const h = P().hand; return Array.isArray(h) ? h.length > 0 : Object.values(h || {}).some(x => x && x.s && x.s.length); }
+const HAND_LOCK_MSG = '③で てがきした もじが あるので、ひらがな／カタカナは かえられません（てがきを まもる ため）。せんせいに きいてね';
 // てがき：ますの ばんごう → { ch: もじ, s: せん }
 function handChars() { if (!P().hand || Array.isArray(P().hand)) P().hand = {}; return P().hand; }
 let sheetGeomNow = null, sheetXf = null;
@@ -217,12 +221,14 @@ async function drawFinish() {
   $('#snapRow').hidden = !finSnap();
 }
 // ひらいた さくひんの「ほぞんした ときの もじ・なまえ」。ぶんしょうが かわったら（あたらしい さくひん）つかわない
-function finSnap() { const s = fin.snap; if (s && s.text !== finText()) delete fin.snap; return fin.snap || null; }
+// くらべるのは なかの もじ（ひらがな）どうし。いまの せっていと ちがう もじで ほぞんした さくひんでも、ひらいた だけでは はずさない
+function finSnap() { const s = fin.snap; if (s && kata2hira(s.text) !== P().doc.join('\n')) delete fin.snap; return fin.snap || null; }
 function finO() {
   // だい・なまえも その ひとの もじで だす（fin そのものは かえない）
   const s = finSnap(), o = Object.assign({}, fin, { title: dsp(fin.title || ''), nameText: dsp(P().name) });
   if (!s) return o;
-  // ほぞんした ときに なかった もじは、あとで とうろくしても まぜない（いちらん・PDF と おなじ みえかた）
+  // ほぞんした ときに なかった もじは、あとで とうろくしても まぜない（いちらん・PDF と おなじ みえかた）。だいは なおして いなければ ほぞんした ときの もじ
+  if (typeof s.title === 'string' && kata2hira(s.title) === (fin.title || '')) o.title = s.title;
   return Object.assign(o, { nameText: s.nameText, glyphs: s.glyphs || undefined });
 }
 function renderFinish() {
@@ -243,7 +249,7 @@ function renderFinish() {
   [['#optUse', 'use'], ['#optPaper', 'paper'], ['#optDir', 'dir'], ['#optCols', 'cols'], ['#optRows', 'rows'], ['#optGstyle', 'gstyle'], ['#optSize', 'size'], ['#optFont', 'font'], ['#optWeight', 'weight']]
     .forEach(([s, k]) => { $(s).value = String(fin[k]); });
   $('#optName').checked = fin.name; $('#optSentBreak').checked = fin.sentBreak !== false;
-  $('#optTitle').value = dsp(fin.title || '');
+  $('#optTitle').value = finO().title;
   $('#optModel').checked = fin.model; $('#optPenOnly').checked = fin.penOnly;
   $('#btnBrMode').classList.toggle('on', brMode); $('#btnBrMode').setAttribute('aria-pressed', brMode ? 'true' : 'false');
   $('#brHint').hidden = !brMode;
@@ -320,7 +326,8 @@ function paintPad(live) {
 function savePad() {
   const cells = handCells(); const cell = cells[fin.hi]; if (!cell) return;
   if (padStrokes.length) handChars()[fin.hi] = { ch: cell.ch, s: padStrokes.map(s => s.slice()) };
-  else delete handChars()[fin.hi];
+  // ちがう もじの てがき（かいて いない わく）は、ひらいて とじた だけでは けさない
+  else { const old = handChars()[fin.hi]; if (!old || old.ch === cell.ch) delete handChars()[fin.hi]; }
   saveDB(); drawFinish();
 }
 (() => { const cv = $('#handPad'); cv.width = PADN * 2; cv.height = PADN * 2; })();

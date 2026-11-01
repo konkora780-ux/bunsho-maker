@@ -253,7 +253,7 @@ const keyLabel = k => k === 'SCRIPT' ? 'あ⇄ア' : KEY_SHOW[k] || (S().keyCase
 // ひらがな⇔カタカナの きりかえキー（せんせいが「だす」に した とき）。おすと その ひとの もじが かわる（ぶんしょうは きえない）
 const scriptKeyOn = () => S().scriptKey !== false;
 const SCRIPT_ARIA = 'ひらがな と カタカナを きりかえる';
-function toggleScript() { S().script = KATA() ? 'hira' : 'kata'; saveDB(); toast(KATA() ? 'カタカナに しました' : 'ひらがなに しました'); if (ty) { renderTarget(); renderBig(); } renderKB(); }
+function toggleScript() { if (handLocked()) return toast(HAND_LOCK_MSG); S().script = KATA() ? 'hira' : 'kata'; saveDB(); toast(KATA() ? 'カタカナに しました' : 'ひらがなに しました'); if (ty) { renderTarget(); renderBig(); } renderKB(); }
 // キーを つくりなおしても、フォーカス（スイッチ・キーボード そうさ）を おなじ キーに もどす
 function renderKB() {
   const a = document.activeElement, fk = a && a.closest && a.closest('#kb') ? a.dataset.k : null;
