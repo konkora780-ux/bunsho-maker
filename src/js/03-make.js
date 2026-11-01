@@ -236,7 +236,7 @@ function renderChooser(key, idx) {
     box.append(el('button', { class: 'btn small warn tonly', 'aria-label': x.w + ' を けす', onclick: () => { P().words[key] = mine.filter(y => y !== x.w); saveDB(); renderChooser(key, idx); } }, '✕'));
   });
   ch.append(box);
-  const inp = el('input', { type: 'text', maxlength: 30, placeholder: 'あたらしい ことば', 'aria-label': 'あたらしい ことば', style: 'padding:10px;border-radius:10px;border:2px solid var(--line);flex:1;min-width:0' });
+  const inp = el('input', { type: 'text', maxlength: 30, 'data-kana': '1', placeholder: 'あたらしい ことば（ひらがな）', 'aria-label': 'あたらしい ことば', style: 'padding:10px;border-radius:10px;border:2px solid var(--line);flex:1;min-width:0' });
   // 「なにを」には、そのことばに あう うごきも えらぶ
   const vsel = el('select', { 'aria-label': 'どうする', style: 'padding:10px;border-radius:10px;border:2px solid var(--line);background:#fff' });
   Object.entries(VERBS).forEach(([k, v]) => vsel.append(el('option', { value: k }, '〜を ' + v.n)));

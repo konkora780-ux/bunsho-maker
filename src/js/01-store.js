@@ -17,6 +17,29 @@ function toast(msg) {
   document.body.append(t);
   setTimeout(() => t.remove(), 2200);
 }
+// ===== かんじは うてない（ひらがなで うつ）=====
+// ぶん・ことば・だい・なまえに なる らん（じゆうに かく・ぶんしょうを なおす・せんせいが たす ことば・だい・なまえ）では、かんじを とりのぞいて しらせる。
+// にほんごの へんかんの とちゅう（isComposing）は さわらず、きまった あとに とりのぞく。まえから ある データの かんじは けさない
+const KANJI_RE = /[\u3005\u3006\u3007\u303B\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\u{20000}-\u{3134F}]/gu;
+const KANA_ONLY = '#freeText,#docEdit,#optTitle,#profName,[data-kana]';
+const stripKanji = s => s.replace(KANJI_RE, '');
+let kanjiToastAt = 0;
+function dropKanji(e) {
+  const t = e.target;
+  if (!t.matches || !t.matches(KANA_ONLY) || (e.type === 'input' && e.isComposing)) return;
+  const v = t.value, nv = stripKanji(v);
+  if (nv === v) return;
+  // カーソルの まえで けした かずだけ もどす
+  const at = t.selectionStart == null ? nv.length : t.selectionStart - (v.slice(0, t.selectionStart).length - stripKanji(v.slice(0, t.selectionStart)).length);
+  t.value = nv;
+  try { t.setSelectionRange(at, at); } catch (_) {}
+  if (Date.now() - kanjiToastAt > 2500) { kanjiToastAt = Date.now(); toast('かんじは つかえません。ひらがなで うってね'); }
+  // へんかんが おわった ときは、アプリの ほうにも あたらしい なかみを しらせる
+  if (e.type === 'compositionend') t.dispatchEvent(new Event('input', { bubbles: true }));
+}
+// とらえる だんかい（capture）で さきに とりのぞくので、それぞれの らんの しょりは かんじの ない なかみを うけとる
+document.addEventListener('input', dropKanji, true);
+document.addEventListener('compositionend', dropKanji, true);
 // カタカナ→ひらがな
 const kata2hira = s => s.replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
 const normText = s => kata2hira(s).replace(/!/g, '！').replace(/\?/g, '？').replace(/,/g, '、').replace(/\./g, '。');

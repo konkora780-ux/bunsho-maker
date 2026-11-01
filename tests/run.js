@@ -11,5 +11,6 @@ require('./p3.test');
 require('./p4.test');
 require('./p5.test');
 require('./p6.test');
+require('./p7.test');
 if (!process.argv.includes('--quick')) require('./e2e.test');
 run().then(fail => { console.log(fail ? `\n${fail}こ しっぱい` : '\nぜんぶ OK'); process.exit(fail ? 1 : 0); });
