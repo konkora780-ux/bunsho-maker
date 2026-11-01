@@ -8,7 +8,7 @@ test('7-1 じゆうに かく・ぶんしょうを なおす・だい・なま�
   await pg.locator('#freeText').fill('きょう学校で𠮷あそんだ。');
   const r1 = await pg.evaluate(() => [$('#freeText').value, P().mk.free, $$('.toast').map(x => x.textContent).join('|')]);
   eq(r1.slice(0, 2), ['きょうであそんだ。', 'きょうであそんだ。']);
-  ok(/かんじは つかえません/.test(r1[2]), r1[2]);
+  ok(/かんじや ABC は つかえません/.test(r1[2]), r1[2]);
   // ぶんしょうを なおす
   await pg.evaluate(() => { P().doc = ['あいう。']; saveDB(); show('make'); $('#docEdit').closest('details').open = true; });
   await pg.locator('#docEdit').fill('あい漢字う。');
@@ -26,10 +26,10 @@ test('7-1 じゆうに かく・ぶんしょうを なおす・だい・なま�
   const w = pg.locator('#chooser input[data-kana]').first();
   await w.fill('音楽おんがく');
   eq(await w.inputValue(), 'おんがく');
-  // カタカナ・すうじ・きごうは そのまま（いまは かんじ だけ）
+  // ひらがなの ひとは カタカナも ひらがなに そろう。すうじ・きごうは そのまま
   await pg.evaluate(() => { mk = P().mk = { tpl: 'jiyu', vals: {}, active: null, free: '' }; show('make'); });
   await pg.locator('#freeText').fill('ボール 3こ！');
-  eq(await pg.evaluate(() => P().mk.free), 'ボール 3こ！');
+  eq(await pg.evaluate(() => P().mk.free), 'ぼーる 3こ！');
   noErr(pg);
 });
 

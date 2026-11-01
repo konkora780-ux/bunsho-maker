@@ -151,18 +151,18 @@ function renderFrame() {
   const fr = $('#frame'); fr.innerHTML = '';
   const ch = $('#chooser'); ch.innerHTML = '';
   if (t.id === 'jiyu') {
-    const ta = el('textarea', { class: 'edit', id: 'freeText', placeholder: 'ここに ひらがなで かきます', 'aria-label': 'じゆうに かく' });
-    ta.value = mk.free;
+    const ta = el('textarea', { class: 'edit', id: 'freeText', placeholder: KATA() ? 'ここに カタカナで かきます' : 'ここに ひらがなで かきます', 'aria-label': 'じゆうに かく' });
+    ta.value = dsp(mk.free);
     ta.addEventListener('input', () => { mk.free = ta.value; renderPreview(); });
     fr.append(ta);
   } else {
     let firstEmpty = null;
     t.parts.forEach((p, i) => {
-      if (p[0] === '#') { fr.append(el('span', { class: 'vpart' }, verbPart(p, t))); return; }
-      if (p[0] !== '@') { fr.append(el('span', {}, p)); return; }
+      if (p[0] === '#') { fr.append(el('span', { class: 'vpart' }, dsp(verbPart(p, t)))); return; }
+      if (p[0] !== '@') { fr.append(el('span', {}, dsp(p))); return; }
       const key = p.slice(1), v = mk.vals[i];
       if (!v && firstEmpty === null) firstEmpty = i;
-      fr.append(el('button', { class: 'slot' + (v ? ' filled' : '') + (mk.active === i ? ' active' : ''), onclick: () => { mk.active = i; renderFrame(); } }, v || SLOTS[key].q));
+      fr.append(el('button', { class: 'slot' + (v ? ' filled' : '') + (mk.active === i ? ' active' : ''), onclick: () => { mk.active = i; renderFrame(); } }, v ? dsp(v) : SLOTS[key].q));
     });
     if (mk.active === null && firstEmpty !== null) { mk.active = firstEmpty; return renderFrame(); }
     if (mk.active !== null) renderChooser(t.parts[mk.active].slice(1), mk.active);
@@ -231,12 +231,12 @@ function renderChooser(key, idx) {
     if (SH().max > 0) items = items.slice(0, SH().max);
   }
   items.forEach(x => {
-    if (!x.mine) return box.append(el('button', { class: 'chip', onclick: () => pick(x.w) }, el('span', { class: 'em' }, x.em), x.label || x.w));
-    box.append(el('button', { class: 'chip mine', onclick: () => pick(x.w) }, x.w));
-    box.append(el('button', { class: 'btn small warn tonly', 'aria-label': x.w + ' を けす', onclick: () => { P().words[key] = mine.filter(y => y !== x.w); saveDB(); renderChooser(key, idx); } }, '✕'));
+    if (!x.mine) return box.append(el('button', { class: 'chip', onclick: () => pick(x.w) }, el('span', { class: 'em' }, x.em), dsp(x.label || x.w)));
+    box.append(el('button', { class: 'chip mine', onclick: () => pick(x.w) }, dsp(x.w)));
+    box.append(el('button', { class: 'btn small warn tonly', 'aria-label': dsp(x.w) + ' を けす', onclick: () => { P().words[key] = mine.filter(y => y !== x.w); saveDB(); renderChooser(key, idx); } }, '✕'));
   });
   ch.append(box);
-  const inp = el('input', { type: 'text', maxlength: 30, 'data-kana': '1', placeholder: 'あたらしい ことば（ひらがな）', 'aria-label': 'あたらしい ことば', style: 'padding:10px;border-radius:10px;border:2px solid var(--line);flex:1;min-width:0' });
+  const inp = el('input', { type: 'text', maxlength: 30, 'data-kana': '1', placeholder: KATA() ? 'あたらしい ことば（カタカナ）' : 'あたらしい ことば（ひらがな）', 'aria-label': 'あたらしい ことば', style: 'padding:10px;border-radius:10px;border:2px solid var(--line);flex:1;min-width:0' });
   // 「なにを」には、そのことばに あう うごきも えらぶ
   const vsel = el('select', { 'aria-label': 'どうする', style: 'padding:10px;border-radius:10px;border:2px solid var(--line);background:#fff' });
   Object.entries(VERBS).forEach(([k, v]) => vsel.append(el('option', { value: k }, '〜を ' + v.n)));
@@ -257,7 +257,7 @@ function renderPreview() {
   const s = t.id === 'jiyu' ? sentenceText() : t.parts.map((p, i) => partText(p, i, t, '〇〇')).join('');
   // ながすぎる ときは けさずに のこして、へらして もらう
   const over = s.length - bodyMax();
-  $('#sentPreview').textContent = over > 0 ? `（ながすぎます。あと ${over}もじ へらしてね）` : s || '（ことばを えらぶと ここに でます）';
+  $('#sentPreview').textContent = over > 0 ? `（ながすぎます。あと ${over}もじ へらしてね）` : dsp(s) || '（ことばを えらぶと ここに でます）';
   $('#btnAddSent').disabled = !sentenceComplete() || over > 0;
 }
 // じゅんじょの ことば（1ぎょうめ・あいだ・さいごの ぎょう）
@@ -369,15 +369,15 @@ function renderDoc() {
   $('#optConn').checked = !!p.conn;
   if (!p.doc.length) dl.append(el('div', { class: 'hint' }, 'まだ ありません。うえで ぶんを つくって「このぶんを いれる」を おしてね。'));
   const last = p.doc.length - 1;
-  p.doc.forEach((s, i) => dl.append(el('div', { class: 'docline' }, el('span', {}, s),
+  p.doc.forEach((s, i) => dl.append(el('div', { class: 'docline' }, el('span', {}, dsp(s)),
     el('span', { class: 'mv' },
       mvBtn('▲', 'うえへ', i === 0, () => moveLine(i, -1)), mvBtn('▼', 'したへ', i === last, () => moveLine(i, 1))),
     el('button', { class: 'btn small', 'aria-label': 'よむ', onclick: () => speak(s) }, '🔊'),
     srcOf(i) ? el('button', { class: 'btn small', onclick: () => editLine(i) }, '✏️ なおす') : '',
     el('button', { class: 'btn small warn tonly', onclick: () => { const ord = ident().filter(x => x !== i), how = p.conn ? 'conn' : 'keep'; confirmLoss(setDoc(ord.map(k => ({ i: k, body: stripConn(p.doc[k]) })), how, true), () => { if (relayDoc(ord, how) == null) return; if (mk.editIdx != null) delete mk.editIdx; saveDB(); renderDoc(); renderPreview(); }); } }, '✕'))));
-  $('#docEdit').value = p.doc.join('\n');
+  $('#docEdit').value = dsp(p.doc.join('\n'));
   const bad = [...new Set(p.doc.join('').split('').filter(c => !isTypable(c)))];
-  $('#docWarn').textContent = bad.length ? '※ うてない もじが あります：' + bad.join(' ') + '（タイピングでは とばします）' : '';
+  $('#docWarn').textContent = bad.length ? '※ うてない もじが あります：' + dsp(bad.join(' ')) + '（タイピングでは とばします）' : '';
   $('#goType').disabled = !p.doc.length;
   $('#goType').textContent = practiceOn() ? 'つぎへ：うってみる ▶' : 'つぎへ：しあげる ▶';
 }

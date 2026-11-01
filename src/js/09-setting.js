@@ -45,6 +45,8 @@ function renderSetting() {
   $('#optRomaji').value = S().romaji;
   $('#optCase').value = S().keyCase;
   $('#optSpeakPick').checked = S().speakPick;
+  $('#optScript').value = KATA() ? 'kata' : 'hira';
+  $('#optScriptKey').checked = scriptKeyOn();
   $('#btnDownload').hidden = IN_FRAME;
   $('#btnUndoReplace').hidden = !DB.replacedBackup;
   renderBroken();
@@ -52,6 +54,9 @@ function renderSetting() {
 $('#optRomaji').addEventListener('change', e => { S().romaji = e.target.value; saveDB(); });
 $('#optCase').addEventListener('change', e => { S().keyCase = e.target.value; saveDB(); });
 $('#optSpeakPick').addEventListener('change', e => { S().speakPick = e.target.checked; saveDB(); });
+// もじ（ひらがな／カタカナ）：なかみは ひらがなの まま なので、きりかえても ぶん・ことば・てがきは きえない
+$('#optScript').addEventListener('change', e => { S().script = e.target.value === 'kata' ? 'kata' : 'hira'; if (saveDB()) toast(KATA() ? 'カタカナに しました' : 'ひらがなに しました'); });
+$('#optScriptKey').addEventListener('change', e => { S().scriptKey = e.target.checked; saveDB(); });
 $('#btnProfRename').addEventListener('click', () => { const n = $('#profName').value.trim(); if (!n) return; P().name = n; renderWho(); if (saveDB()) toast('かえました'); });
 $('#btnProfAdd').addEventListener('click', () => {
   const n = $('#profName').value.trim();
@@ -190,7 +195,7 @@ function cleanSettings(v) {
     romaji: pick(o.romaji, ['kunrei', 'hepburn'], d.romaji), guide: pick(o.guide, [0, 1, 2], d.guide), finger: bool(o.finger, d.finger), sound: bool(o.sound, d.sound),
     keyCase: pick(o.keyCase, ['lower', 'upper'], d.keyCase), glyphModel: bool(o.glyphModel, d.glyphModel), input: pick(o.input, ['kana', 'roma'], d.input),
     showBig: bool(o.showBig, d.showBig), chunk: pick(o.chunk, ['auto', 'ten', 'sent', 'all'], d.chunk), speakPick: bool(o.speakPick, d.speakPick),
-    advance: pick(o.advance, ['auto09', 'auto2', 'manual'], d.advance), show: cleanShow(o.show),
+    advance: pick(o.advance, ['auto09', 'auto2', 'manual'], d.advance), script: pick(o.script, ['hira', 'kata'], d.script), scriptKey: bool(o.scriptKey, d.scriptKey), show: cleanShow(o.show),
   };
 }
 function cleanMk(v) {

@@ -1,7 +1,12 @@
 // ===== もじとうろく =====
-const GLYPH_ROWS = ['あいうえお', 'かきくけこ', 'さしすせそ', 'たちつてと', 'なにぬねの', 'はひふへほ', 'まみむめも', 'やゆよ', 'らりるれろ', 'わをん',
-  'がぎぐげご', 'ざじずぜぞ', 'だぢづでど', 'ばびぶべぼ', 'ぱぴぷぺぽ', 'ゔ', 'ぁぃぅぇぉ', 'ゃゅょっゎ', '、。ー！？'];
-const GLYPH_ALL = GLYPH_ROWS.join('').split('');
+const GLYPH_HIRA = ['あいうえお', 'かきくけこ', 'さしすせそ', 'たちつてと', 'なにぬねの', 'はひふへほ', 'まみむめも', 'やゆよ', 'らりるれろ', 'わをん',
+  'がぎぐげご', 'ざじずぜぞ', 'だぢづでど', 'ばびぶべぼ', 'ぱぴぷぺぽ', 'ゔ', 'ぁぃぅぇぉ', 'ゃゅょっゎ'];
+const GLYPH_MARKS = '、。ー！？';
+// すうじ（ひらがな・カタカナ どちらでも おなじ）。ならべれば なんけたでも かける
+const GLYPH_NUM = '0123456789';
+// ひらがな・カタカナ・すうじ ぜんぶ とうろく できる。その ひとの もじの ならびを さきに だす
+const glyphRows = () => { const h = GLYPH_HIRA, k = GLYPH_HIRA.map(hira2kata); return (KATA() ? k.concat(h) : h.concat(k)).concat([GLYPH_NUM, GLYPH_MARKS]); };
+const glyphAll = () => glyphRows().join('').split('');
 function drawGlyphThumb(cv, ch) {
   const s = 2, n = 44; cv.width = n * s; cv.height = n * s;
   const c = cv.getContext('2d'); c.setTransform(s, 0, 0, s, 0, 0);
@@ -10,15 +15,16 @@ function drawGlyphThumb(cv, ch) {
 }
 // いまの ぶんしょうで つかう のに、まだ とうろく していない もじ（でてくる じゅん）
 function neededGlyphs() {
-  const nm = fin.name ? (finO().nameText || P().name) : '';
-  return [...new Set([...P().doc.join('') + (fin.title || '') + nm].filter(c => GLYPH_ALL.includes(c) && !P().glyphs[c]))];
+  // しあげに でる もじ（その ひとの もじ）で しらべる
+  const o = finO(), nm = fin.name ? o.nameText : '', all = glyphAll();
+  return [...new Set([...finText() + o.title + nm].filter(c => all.includes(c) && !P().glyphs[c]))];
 }
 function renderGlyphGrid() {
   const g = $('#glyphGrid'); g.innerHTML = '';
   const need = neededGlyphs();
   $('#btnGlyphNeed').hidden = !need.length;
   $('#btnGlyphNeed').textContent = `📝 いまの ぶんしょうの もじから かく（あと ${need.length}もじ）`;
-  GLYPH_ROWS.forEach(row => {
+  glyphRows().forEach(row => {
     const r = el('div', { class: 'grow' });
     row.split('').forEach(ch => {
       const cv = document.createElement('canvas');
@@ -27,16 +33,16 @@ function renderGlyphGrid() {
     });
     g.append(r);
   });
-  const n = GLYPH_ALL.filter(c => P().glyphs[c]).length;
-  $('#glyphProg').textContent = `とうろく ${n} / ${GLYPH_ALL.length}`;
+  const all = glyphAll(), n = all.filter(c => P().glyphs[c]).length;
+  $('#glyphProg').textContent = `とうろく ${n} / ${all.length}`;
   $('#optGlyphModel').checked = S().glyphModel;
 }
 $('#optGlyphModel').addEventListener('change', e => { S().glyphModel = e.target.checked; saveDB(); });
 $('#btnGlyphNeed').addEventListener('click', () => { const q = neededGlyphs(); if (q.length) openReg(q[0], q); });
-$('#btnGlyphNext').addEventListener('click', () => { const c = GLYPH_ALL.find(c => !P().glyphs[c]); if (c) openReg(c); else toast('ぜんぶ とうろくできています！'); });
+$('#btnGlyphNext').addEventListener('click', () => { const c = glyphAll().find(c => !P().glyphs[c]); if (c) openReg(c); else toast('ぜんぶ とうろくできています！'); });
 // queue が あれば その もじだけを じゅんに かく（いまの ぶんしょうで つかう もじ など）
 function openReg(ch, queue) {
-  const list = queue || GLYPH_ALL;
+  const list = queue || glyphAll();
   let strokes = (P().glyphs[ch] || []).map(s => s.slice());
   const N = 300;
   const cv = el('canvas', { class: 'regcv' });

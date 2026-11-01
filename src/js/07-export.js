@@ -140,9 +140,10 @@ $('#btnSaveWork').addEventListener('click', () => {
   // ほぞんした ときの もじ・なまえを さくひんに いれておく（あとで かえても さくひんは かわらない）
   const o = finO(), w = Object.assign({ id: 'w' + Date.now(), date: new Date().toISOString(), text: finText(), conn: !!P().conn }, clone(fin));
   delete w.snap;
-  w.nameText = o.nameText || P().name;
+  // さくひんには みえて いる もじ（ひらがな／カタカナ）で のこす
+  w.title = o.title; w.nameText = o.nameText || P().name;
   if (fin.mode === 'glyph') {
-    const src = o.glyphs || P().glyphs, used = new Set([...w.text, ...(fin.title || ''), ...w.nameText]), g = {};
+    const src = o.glyphs || P().glyphs, used = new Set([...w.text, ...w.title, ...w.nameText]), g = {};
     used.forEach(c => { if (src[c]) g[c] = src[c]; });
     w.glyphs = clone(g);
   }
@@ -178,7 +179,7 @@ function renderWorks() {
   const box = $('#works'); box.innerHTML = '';
   const d = P().draft;
   $('#draftRow').hidden = !d;
-  if (d) { const t = new Date(d.date); $('#draftInfo').textContent = `したがき（${t.getMonth() + 1}/${t.getDate()} ${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')}）：${(d.doc.join('') || '（てがきだけ）').slice(0, 20)}…`; }
+  if (d) { const t = new Date(d.date); $('#draftInfo').textContent = `したがき（${t.getMonth() + 1}/${t.getDate()} ${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')}）：${(dsp(d.doc.join('')) || '（てがきだけ）').slice(0, 20)}…`; }
   const ws = P().works;
   updWorksBtn();
   if (!ws.length) { box.append(el('div', { class: 'hint' }, 'まだ ありません。')); return; }
@@ -225,10 +226,12 @@ function openWork(w) {
   const busy = Object.keys(mk.vals || {}).length || (mk.free || '').trim() || mk.editIdx != null;
   if (P().doc.length || Object.keys(handChars()).length || busy) P().draft = before;
   // ひらいた さくひんには、いまの ぶんの つくりかた・くぎりを もちこまない（したがきの ほうに のこる）
-  P().doc = w.text.split('\n'); P().conn = !!w.conn;
+  // なかは ひらがなで もつ（カタカナで ほぞんした さくひんも。みせる ときに その ひとの もじに する）
+  P().doc = kata2hira(w.text).split('\n'); P().conn = !!w.conn;
   ['docIds', 'docSrc', 'lineSrc', 'cuts', 'cutsText'].forEach(k => delete P()[k]);
   mk = P().mk = { tpl: mk.tpl, vals: {}, active: null, free: '' };
   Object.keys(FIN_DEF).forEach(k => { if (w[k] !== undefined && k !== 'hi') fin[k] = clone(w[k]); });
+  fin.title = kata2hira(fin.title || '');
   fin.page = 0; fin.hi = 0;
   // ほぞんした ときの もじ・なまえで ひらく（ぶんしょうを かえるまで）
   fin.snap = { id: w.id, text: w.text, nameText: w.nameText || P().name, glyphs: w.glyphs ? clone(w.glyphs) : null };

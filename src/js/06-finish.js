@@ -7,7 +7,7 @@ const FONTS = [
   ['まるもじ（Zen Maru Gothic）', '"Zen Maru Gothic",sans-serif'],
   ['クレー（iPadに いれたとき）', '"Klee","Klee One",serif'],
 ];
-const SMALL = 'ぁぃぅぇぉゃゅょっゎ';
+const SMALL = 'ぁぃぅぇぉゃゅょっゎァィゥェォャュョッヮ';
 const PUNCT = '、。';
 const FIN_DEF = { hi: 0, mode: 'font', dir: 'yoko', cols: 10, grid: true, name: false, font: 0, weight: 0.075, model: true, penOnly: false,
   use: 'free', paper: 'free', rows: 0, gstyle: 'masu', size: 0.72, title: '', sentBreak: true, breaks: [], page: 0 };
@@ -189,7 +189,8 @@ async function renderPages(o, text, hand, scale, onPage) {
 }
 async function ensureFont(fam) { try { await document.fonts.load(`40px ${fam}`, 'あ'); } catch (e) {} }
 
-function finText() { return P().doc.join('\n'); }
+// しあげの もじ：なかの ひらがなを、その ひとの もじ（ひらがな／カタカナ）に して だす（てがきの ばしょは もじの かずが おなじ なので ずれない）
+function finText() { return dsp(P().doc.join('\n')); }
 // てがき：ますの ばんごう → { ch: もじ, s: せん }
 function handChars() { if (!P().hand || Array.isArray(P().hand)) P().hand = {}; return P().hand; }
 let sheetGeomNow = null, sheetXf = null;
@@ -218,9 +219,11 @@ async function drawFinish() {
 // ひらいた さくひんの「ほぞんした ときの もじ・なまえ」。ぶんしょうが かわったら（あたらしい さくひん）つかわない
 function finSnap() { const s = fin.snap; if (s && s.text !== finText()) delete fin.snap; return fin.snap || null; }
 function finO() {
-  const s = finSnap(); if (!s) return fin;
+  // だい・なまえも その ひとの もじで だす（fin そのものは かえない）
+  const s = finSnap(), o = Object.assign({}, fin, { title: dsp(fin.title || ''), nameText: dsp(P().name) });
+  if (!s) return o;
   // ほぞんした ときに なかった もじは、あとで とうろくしても まぜない（いちらん・PDF と おなじ みえかた）
-  return Object.assign({}, fin, { nameText: s.nameText, glyphs: s.glyphs || undefined });
+  return Object.assign(o, { nameText: s.nameText, glyphs: s.glyphs || undefined });
 }
 function renderFinish() {
   const ml = SH().modes, mf = Array.isArray(ml) ? MODE_IDS.filter(m => ml.includes(m)) : MODE_IDS;
@@ -240,7 +243,7 @@ function renderFinish() {
   [['#optUse', 'use'], ['#optPaper', 'paper'], ['#optDir', 'dir'], ['#optCols', 'cols'], ['#optRows', 'rows'], ['#optGstyle', 'gstyle'], ['#optSize', 'size'], ['#optFont', 'font'], ['#optWeight', 'weight']]
     .forEach(([s, k]) => { $(s).value = String(fin[k]); });
   $('#optName').checked = fin.name; $('#optSentBreak').checked = fin.sentBreak !== false;
-  $('#optTitle').value = fin.title || '';
+  $('#optTitle').value = dsp(fin.title || '');
   $('#optModel').checked = fin.model; $('#optPenOnly').checked = fin.penOnly;
   $('#btnBrMode').classList.toggle('on', brMode); $('#btnBrMode').setAttribute('aria-pressed', brMode ? 'true' : 'false');
   $('#brHint').hidden = !brMode;

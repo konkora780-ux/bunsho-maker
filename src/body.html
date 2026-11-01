@@ -103,6 +103,15 @@ textarea.edit{width:100%;min-height:110px;padding:10px;border-radius:12px;border
 .kcol .key{flex:none;height:58px;width:100%;font-size:26px;font-family:var(--f-model)}
 .kcol .key.fn{font-size:17px;font-family:var(--f-ui)}
 .key.ghost{visibility:hidden;height:58px}
+.knum{flex:11 1 0;min-width:0;display:flex;flex-direction:column}
+.knumrow{display:flex;gap:6px}
+.knumrow .key{height:58px;font-family:var(--f-model)}
+.kcol.side .key.fn{font-size:14px;padding:0 2px;font-family:var(--f-ui)}
+.kcol.side .key.fn.on{background:#5b6570;color:#fff}
+.kcol.side .sm{display:none}
+.kcol.side .key.fn{white-space:nowrap;letter-spacing:0}
+@media (max-width:900px){.kcol.side .key.fn{font-size:11px}}
+@media (max-width:600px){.kcol.side .lg{display:none}.kcol.side .sm{display:inline}.kcol.side .key.fn{font-size:12px}}
 .key.miss{background:#ffd3d0}
 .key.hit{transform:translateY(2px);box-shadow:none}
 @keyframes pulse{50%{transform:scale(1.06)}}
@@ -450,7 +459,12 @@ button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-vis
         <div id="showBox"></div>
       </div>
       <div class="card">
-        <h2>よみあげ</h2>
+        <h2>もじ</h2>
+        <div class="field">つかう もじ
+          <select id="optScript"><option value="hira">ひらがな</option><option value="kata">カタカナ</option></select></div>
+        <p class="hint">ことば・ぶん・だい・しあげが この もじに なります。らんに うった もじも この もじに そろいます（かんじは つかえません）。きりかえても ぶんしょうは きえません。もじとうろくは もじごとに べつです。</p>
+        <label class="field" style="flex-direction:row;align-items:center"><input type="checkbox" id="optScriptKey"> ②の キーボードで「カタカナ」「ひらがな」を こどもが きりかえられる</label>
+        <h2 style="margin-top:14px">よみあげ</h2>
         <label class="field" style="flex-direction:row;align-items:center"><input type="checkbox" id="optSpeakPick"> ことばを えらんだら こえで よむ</label>
         <p class="hint">せっていは ひとごとに ほぞんされます。うえの「つかうひと」を かえると、その ひとの せってい・フォント・しあげかたに かわります。</p>
         <h2 style="margin-top:14px">ローマじ・キーボード</h2>

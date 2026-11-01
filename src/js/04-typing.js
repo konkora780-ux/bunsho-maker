@@ -18,6 +18,7 @@ const K1 = {
   'ぁ':'la xa','ぃ':'li xi','ぅ':'lu xu','ぇ':'le xe','ぉ':'lo xo',
   'ゃ':'lya xya','ゅ':'lyu xyu','ょ':'lyo xyo','ゎ':'lwa xwa',
   '、':',','。':'.','ー':'-','！':'!','？':'?','　':' ',' ':' ','「':'[','」':']',
+  '0':'0','1':'1','2':'2','3':'3','4':'4','5':'5','6':'6','7':'7','8':'8','9':'9',
 };
 const K2 = {
   'きゃ':'kya','きゅ':'kyu','きょ':'kyo','ぎゃ':'gya','ぎゅ':'gyu','ぎょ':'gyo',
@@ -158,7 +159,7 @@ function completeUnit() {
 }
 function loadSentence() {
   const text = ty.sents[ty.si] || '';
-  Object.assign(ty, { units: KANA_MODE() ? buildKanaUnits(text) : buildUnits(text), ui: 0, buf: '', pend: null, done: false, typed: [] });
+  Object.assign(ty, { units: KANA_MODE() ? buildKanaUnits(text) : buildUnits(text), ui: 0, buf: '', pend: null, done: false, typed: [], num: false });
   ty.units.forEach(u => { if (u.skip && !u.br && !isSpCh(u.kana)) ty.skipped.add(u.kana); });
   ty.n = ty.units.filter(u => !u.skip).length; ty.tot += ty.n;
   skipAuto();
@@ -179,7 +180,8 @@ function beep(ok) {
     o.connect(g).connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime + 0.22);
   } catch (e) {}
 }
-const kanaLabel = k => k === ' ' || k === '　' ? '␣' : k;
+// うつ もじは なかで ひらがな。カタカナの ひとには カタカナで みせる
+const kanaLabel = k => k === ' ' || k === '　' ? '␣' : dsp(k);
 function renderTarget() {
   const tg = $('#target'); tg.innerHTML = '';
   const g = S().guide;
@@ -187,7 +189,7 @@ function renderTarget() {
     if (u.br) { tg.append(el('div', { style: 'flex-basis:100%;height:0' })); return; }
     const cls = 'unit' + (u.skip ? ' skip' : i < ty.ui ? ' done' : i === ty.ui ? ' now' : '');
     let r = '';
-    if (KANA_MODE()) r = !u.skip && g > 0 && u.base !== u.kana ? u.base + '＋' + modMark(u) : '';
+    if (KANA_MODE()) r = !u.skip && g > 0 && u.base !== u.kana ? dsp(u.base) + '＋' + modMark(u) : '';
     else if (!u.skip && g > 0) r = i < ty.ui ? u.typed : u.cands[0];
     const rEl = el('span', { class: 'r' });
     if (i === ty.ui && g > 0 && !KANA_MODE()) {
@@ -199,7 +201,7 @@ function renderTarget() {
   const n = ty.units.filter(u => !u.skip).length, d = ty.units.slice(0, ty.ui).filter(u => !u.skip).length;
   const stat = !isStudent() || SH().stat;
   $('#typeStat').textContent = (ty.sents.length > 1 ? `${ty.si + 1}ばんめ／${ty.sents.length}　` : '') + `${d} / ${n} もじ` + (stat ? `　ミス ${ty.miss}` : '') +
-    (ty.skipped.size ? `　（うてないので とばす もじ：${[...ty.skipped].join(' ')}）` : '');
+    (ty.skipped.size ? `　（うてないので とばす もじ：${dsp([...ty.skipped].join(' '))}）` : '');
 }
 function renderBig() {
   const b = $('#bigNow'); b.innerHTML = '';
@@ -222,7 +224,7 @@ function renderBig() {
     const any = ty.tot > 0, stat = !isStudent() || SH().stat;
     b.append(el('div', { class: 'done-box' }, any ? '🎉 できたね！' : 'この ぶんしょうには うてる もじが ありませんでした',
       el('div', { class: 'stat' }, (any ? `うった もじ ${ty.tot}もじ` : '') + (any && stat ? `　じかん ${Math.floor(sec / 60)}ふん${sec % 60}びょう　ミス ${ty.miss}かい` : '')),
-      ty.skipped.size ? el('div', { class: 'stat' }, `うたなかった もじ：${[...ty.skipped].join(' ')}（しあげには そのまま でます）`) : '',
+      ty.skipped.size ? el('div', { class: 'stat' }, `うたなかった もじ：${dsp([...ty.skipped].join(' '))}（しあげには そのまま でます）`) : '',
       el('div', { class: 'row', style: 'justify-content:center;margin-top:10px' },
         el('button', { class: 'btn main', onclick: () => show('finish') }, 'つぎへ：しあげる ▶'))));
     return;
@@ -239,14 +241,19 @@ function renderBig() {
   b.append(el('span', { class: 'bk' }, kanaLabel(u.kana)), br);
 }
 const KB_ROWS = [
+  ['1','2','3','4','5','6','7','8','9','0'],
   ['q','w','e','r','t','y','u','i','o','p'],
   ['a','s','d','f','g','h','j','k','l','-'],
   ['z','x','c','v','b','n','m',',','.'],
-  ['!',' ','?'],
+  ['SCRIPT','!',' ','?'],
 ];
-const FINGER = { q:0,a:0,z:0,w:1,s:1,x:1,e:2,d:2,c:2,r:3,f:3,v:3,t:3,g:3,b:3,y:4,h:4,n:4,u:4,j:4,m:4,i:5,k:5,',':5,o:6,l:6,'.':6,p:7,'-':7,'!':0,'?':7 };
+const FINGER = { '1':0,'2':1,'3':2,'4':3,'5':3,'6':4,'7':4,'8':5,'9':6,'0':7,q:0,a:0,z:0,w:1,s:1,x:1,e:2,d:2,c:2,r:3,f:3,v:3,t:3,g:3,b:3,y:4,h:4,n:4,u:4,j:4,m:4,i:5,k:5,',':5,o:6,l:6,'.':6,p:7,'-':7,'!':0,'?':7 };
 const KEY_SHOW = { '-':'ー', ',':'、', '.':'。', '!':'！', '?':'？', ' ':'くうはく' };
-const keyLabel = k => KEY_SHOW[k] || (S().keyCase === 'upper' ? k.toUpperCase() : k);
+const keyLabel = k => k === 'SCRIPT' ? 'あ⇄ア' : KEY_SHOW[k] || (S().keyCase === 'upper' ? k.toUpperCase() : k);
+// ひらがな⇔カタカナの きりかえキー（せんせいが「だす」に した とき）。おすと その ひとの もじが かわる（ぶんしょうは きえない）
+const scriptKeyOn = () => S().scriptKey !== false;
+const SCRIPT_ARIA = 'ひらがな と カタカナを きりかえる';
+function toggleScript() { S().script = KATA() ? 'hira' : 'kata'; saveDB(); toast(KATA() ? 'カタカナに しました' : 'ひらがなに しました'); if (ty) { renderTarget(); renderBig(); } renderKB(); }
 // キーを つくりなおしても、フォーカス（スイッチ・キーボード そうさ）を おなじ キーに もどす
 function renderKB() {
   const a = document.activeElement, fk = a && a.closest && a.closest('#kb') ? a.dataset.k : null;
@@ -261,6 +268,7 @@ function renderKB0() {
     const r = el('div', { class: 'kr' });
     if (ri === 2) r.append(el('div', { style: 'flex:.6 1 0' }));
     row.forEach(k => {
+      if (k === 'SCRIPT') { if (scriptKeyOn()) r.append(fnKey(k, 'あ⇄ア', SCRIPT_ARIA, toggleScript)); return; }
       let cls = 'key' + (k === ' ' ? ' space' : '') + (k === nk ? ' next' : '');
       if (S().finger && FINGER[k] !== undefined) cls += ' f' + FINGER[k];
       const b = el('button', { class: cls, 'data-k': k, 'aria-label': KEY_SHOW[k] || k }, keyLabel(k));
@@ -272,6 +280,13 @@ function renderKB0() {
     if (ri === 2) r.append(el('div', { style: 'flex:.6 1 0' }));
     kb.append(r);
   });
+}
+// うつ もじでは ない キー（きりかえ）
+function fnKey(k, lab, aria, fn, on) {
+  const b = el('button', { class: 'key fn' + (on ? ' next' : ''), 'data-k': k, 'aria-label': aria }, lab);
+  b.addEventListener('pointerdown', e => { e.preventDefault(); b._pd = Date.now(); fn(); });
+  b.addEventListener('click', () => { if (b._pd) { b._pd = 0; return; } fn(); });
+  return b;
 }
 function press(k) {
   if (!ty || ty.done) return;
@@ -288,7 +303,8 @@ document.addEventListener('keydown', e => {
   if (e.target.matches('input,textarea,select')) return;
   if (KANA_MODE()) {
     const kk = e.key === ' ' ? ' ' : e.key;
-    if (kk.length === 1 && (KANA_KEYS.has(kk) || kanaBase(kk))) { e.preventDefault(); typeKanaDirect(kk); }
+    const kh = kata2hira(kk);
+    if (kh.length === 1 && (KANA_KEYS.has(kh) || kanaBase(kh))) { e.preventDefault(); typeKanaDirect(kh); }
     return;
   }
   let k = e.key.length === 1 ? e.key.toLowerCase() : null;
@@ -299,13 +315,16 @@ document.addEventListener('keydown', e => {
 
 // ===== ② ひらがな入力（iPad「日本語かな」配列） =====
 const KANA_MODE = () => S().input !== 'roma';
-// DOM は左から：左端が わ行・ー・小゛゜、右端が あ行（iPad と同じ向き）。いちばん右に くとうてん
+// DOM は左から（iPad の「日本語かな」と おなじ）：くとうてん → わ行（わをんー 小゛゜）→ … → あ行 → くうはく
 const KANA_COLS = [
-  ['わ', 'を', 'ん', 'ー', 'MOD'], ['ら', 'り', 'る', 'れ', 'ろ'], ['や', '', 'ゆ', '', 'よ'], ['ま', 'み', 'む', 'め', 'も'],
+  ['', '？', '！', '、', '。'], ['わ', 'を', 'ん', 'ー', 'MOD'], ['ら', 'り', 'る', 'れ', 'ろ'], ['や', '', 'ゆ', '', 'よ'], ['ま', 'み', 'む', 'め', 'も'],
   ['は', 'ひ', 'ふ', 'へ', 'ほ'], ['な', 'に', 'ぬ', 'ね', 'の'], ['た', 'ち', 'つ', 'て', 'と'], ['さ', 'し', 'す', 'せ', 'そ'],
-  ['か', 'き', 'く', 'け', 'こ'], ['あ', 'い', 'う', 'え', 'お'], ['、', '。', '？', '！', ''],
+  ['か', 'き', 'く', 'け', 'こ'], ['あ', 'い', 'う', 'え', 'お'],
 ];
-const KANA_KEYS = new Set(KANA_COLS.flat().filter(k => k && k !== 'MOD').concat([' ']));
+// すうじの ばん（「123」キーで きりかえる）：iPad の すうじキーボードの いちばん うえの だんと おなじ よこ 1れつ
+const NUM_ROW = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
+const isDigit = c => /^[0-9]$/.test(c);
+const KANA_KEYS = new Set(KANA_COLS.flat().concat(NUM_ROW).filter(k => k && k !== 'MOD').concat([' ']));
 // 「小゛゜」キーを おすたびに かわる じゅんばん（例：は→ば→ぱ→は、つ→っ→づ→つ）
 const K_SMALL = { 'あ':'ぁ','い':'ぃ','う':'ぅ','え':'ぇ','お':'ぉ','つ':'っ','や':'ゃ','ゆ':'ゅ','よ':'ょ','わ':'ゎ' };
 const K_DAKU = { 'か':'が','き':'ぎ','く':'ぐ','け':'げ','こ':'ご','さ':'ざ','し':'じ','す':'ず','せ':'ぜ','そ':'ぞ','た':'だ','ち':'ぢ','つ':'づ','て':'で','と':'ど','は':'ば','ひ':'び','ふ':'ぶ','へ':'べ','ほ':'ぼ','う':'ゔ' };
@@ -353,31 +372,47 @@ function renderBigKana(b, u) {
   const seq = el('span', { class: 'br', style: 'font-size:34px;display:flex;gap:10px;align-items:center' });
   const nk = nextKeyKana();
   const key = (lab, on) => el('span', { class: on ? 'n' : '', style: 'border:2px solid var(--line);border-radius:10px;padding:2px 12px;background:' + (on ? 'var(--hl)' : '#fff') }, lab);
-  if (u.base === u.kana || u.kana === '　') seq.append(key(u.base === ' ' ? 'くうはく' : u.base, true));
-  else seq.append(key(u.base, nk === u.base), '→', key('小゛゜', nk === 'MOD'), el('span', { class: 'stat' }, ty.pend ? '（' + u.kana + ' に なるまで おす）' : ''));
+  if (u.base === u.kana || u.kana === '　') seq.append(key(u.base === ' ' ? 'くうはく' : dsp(u.base), true));
+  else seq.append(key(dsp(u.base), nk === u.base), '→', key('小゛゜', nk === 'MOD'), el('span', { class: 'stat' }, ty.pend ? '（' + dsp(u.kana) + ' に なるまで おす）' : ''));
   b.append(seq);
 }
+// せまい がめんでは みじかい なまえ（CSS で きりかえ）
+const twoLab = (l, sh) => el('span', {}, el('span', { class: 'lg' }, l), el('span', { class: 'sm' }, sh));
 function renderKanaKB(kb) {
   const nk = S().guide === 2 ? nextKeyKana() : null;
+  // つぎの もじが いまの ばんに ない ときは「123／あいう」キーを ひからせる
+  const numNeed = nk != null && isDigit(nk) !== !!ty.num;
   const grid = el('div', { class: 'kkb' });
-  KANA_COLS.forEach(col => {
+  const side = list => { const c = el('div', { class: 'kcol side' }); list.forEach(b => c.append(b || el('div', { class: 'key ghost' }))); return c; };
+  // ひだりの きりかえ（うえから すうじ・カタカナ・ひらがな）。いまの ばんの キーは おした かたち（on）
+  const setScript = sc => { ty.num = false; if ((sc === 'kata') !== KATA()) toggleScript(); else renderKB(); };
+  const cur = ty.num ? 'num' : KATA() ? 'kata' : 'hira';
+  const sw = (k, lab, aria, fn, want) => { const b = fnKey(k, lab, aria, fn, numNeed && want); b.classList.toggle('on', cur === k.toLowerCase()); b.setAttribute('aria-pressed', cur === k.toLowerCase() ? 'true' : 'false'); return b; };
+  // せんせいが きりかえキーを けして いる ときは、いまの もじの キーだけ（すうじから もどる ため）
+  const showSc = sc => scriptKeyOn() || (sc === 'kata') === KATA();
+  grid.append(side([sw('NUM', '123', 'すうじ', () => { ty.num = true; renderKB(); }, !ty.num),
+    showSc('kata') ? sw('KATA', twoLab('カタカナ', 'カナ'), 'カタカナ', () => setScript('kata'), ty.num && KATA()) : null,
+    showSc('hira') ? sw('HIRA', twoLab('ひらがな', 'かな'), 'ひらがな', () => setScript('hira'), ty.num && !KATA()) : null, null, null]));
+  const keyBtn = k => {
+    const lab = k === 'MOD' ? '小゛゜' : dsp(k);
+    const b = el('button', { class: 'key' + (k === 'MOD' ? ' fn' : '') + (k === nk ? ' next' : ''), 'data-k': k, 'aria-label': lab }, lab);
+    b.addEventListener('pointerdown', e => { e.preventDefault(); b._pd = Date.now(); press(k); });
+    // そとづけ キーボード・VoiceOver・スイッチコントロールの「けってい」でも おせる
+    b.addEventListener('click', () => { if (b._pd) { b._pd = 0; return; } press(k); });
+    return b;
+  };
+  if (ty.num) grid.append(el('div', { class: 'knum' }, el('div', { class: 'knumrow' }, ...NUM_ROW.map(keyBtn))));
+  else KANA_COLS.forEach(col => {
     const c = el('div', { class: 'kcol' });
-    col.forEach(k => {
-      if (!k) { c.append(el('div', { class: 'key ghost' })); return; }
-      const lab = k === 'MOD' ? '小゛゜' : k;
-      const b = el('button', { class: 'key' + (k === 'MOD' ? ' fn' : '') + (k === nk ? ' next' : ''), 'data-k': k, 'aria-label': lab }, lab);
-      b.addEventListener('pointerdown', e => { e.preventDefault(); b._pd = Date.now(); press(k); });
-      // そとづけ キーボード・VoiceOver・スイッチコントロールの「けってい」でも おせる
-      b.addEventListener('click', () => { if (b._pd) { b._pd = 0; return; } press(k); });
-      c.append(b);
-    });
+    col.forEach(k => c.append(k ? keyBtn(k) : el('div', { class: 'key ghost' })));
     grid.append(c);
   });
-  kb.append(grid);
-  const sp = el('button', { class: 'key space' + (nk === ' ' ? ' next' : ''), 'data-k': ' ' }, 'くうはく');
+  // くうはく：iPad と おなじ みぎがわ
+  const sp = el('button', { class: 'key fn space' + (nk === ' ' ? ' next' : ''), 'data-k': ' ', 'aria-label': 'くうはく' }, twoLab('くうはく', '␣'));
   sp.addEventListener('pointerdown', e => { e.preventDefault(); sp._pd = Date.now(); press(' '); });
   sp.addEventListener('click', () => { if (sp._pd) { sp._pd = 0; return; } press(' '); });
-  kb.append(el('div', { class: 'kr' }, el('div', { style: 'flex:2 1 0' }), sp, el('div', { style: 'flex:2 1 0' })));
+  grid.append(side([null, sp, null, null, null]));
+  kb.append(grid);
 }
 $('#optInput').addEventListener('change', e => { S().input = e.target.value; saveDB(); startTyping(); });
 $('#btnTypeRestart').addEventListener('click', startTyping);
@@ -396,7 +431,7 @@ $('#btnCuts').addEventListener('click', () => {
     const cuts = new Set(P().cuts);
     [...text].forEach((ch, i) => {
       if (ch === '\n') { box.append(el('div', { style: 'flex-basis:100%;height:0' })); return; }
-      const b = el('button', { class: 'cutch' + (cuts.has(i) ? ' cut' : ''), 'aria-label': ch + ' の あとで くぎる' }, ch);
+      const b = el('button', { class: 'cutch' + (cuts.has(i) ? ' cut' : ''), 'aria-label': dsp(ch) + ' の あとで くぎる' }, dsp(ch));
       b.addEventListener('click', () => { cuts.has(i) ? cuts.delete(i) : cuts.add(i); P().cuts = [...cuts].sort((a, z) => a - z); saveDB(); draw(); });
       box.append(b);
     });

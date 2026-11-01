@@ -17,37 +17,46 @@ function toast(msg) {
   document.body.append(t);
   setTimeout(() => t.remove(), 2200);
 }
-// ===== かんじは うてない（ひらがなで うつ）=====
-// ぶん・ことば・だい・なまえに なる らん（じゆうに かく・ぶんしょうを なおす・せんせいが たす ことば・だい・なまえ）では、かんじを とりのぞいて しらせる。
-// にほんごの へんかんの とちゅう（isComposing）は さわらず、きまった あとに とりのぞく。まえから ある データの かんじは けさない
-const KANJI_RE = /[\u3005\u3006\u3007\u303B\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\u{20000}-\u{3134F}]/gu;
+// ===== かんじは うてない・もじは ひらがなか カタカナの どちらか =====
+// なかみは いつも ひらがなで もつ（ことば・ぶん・だい）。せんせいが「カタカナ」に した ひとは、みせる ときと しあげ（さくひん）で カタカナに する
+const kata2hira = s => s.replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
+const hira2kata = s => s.replace(/[ぁ-ゖ]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60));
+const KATA = () => S().script === 'kata';
+// みせる もじ：カタカナの ひとは カタカナ、ひらがなの ひとは ひらがな（どちらか だけ）
+const dsp = s => KATA() ? hira2kata(s) : kata2hira(s);
+// ぜんかくの すうじ（０〜９）は はんかく（0〜9）に そろえる（もじとうろく・②の キーと おなじ もじ）
+const normText = s => kata2hira(s).replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/!/g, '！').replace(/\?/g, '？').replace(/,/g, '、').replace(/\./g, '。');
+// ぶん・ことば・だいに なる らん（じゆうに かく・ぶんしょうを なおす・せんせいが たす ことば・だい）と なまえの らんでは、かんじを とりのぞいて しらせる。
+// ぶん・ことば・だいの らんは、その ひとの もじ（ひらがな／カタカナ）に そろえる（なまえは そろえない）。
+// にほんごの へんかんの とちゅう（isComposing）は さわらず、きまった あとに なおす。まえから ある データの かんじは けさない
 const KANA_ONLY = '#freeText,#docEdit,#optTitle,#profName,[data-kana]';
-const stripKanji = s => s.replace(KANJI_RE, '');
+const SCRIPT_FIELD = '#freeText,#docEdit,#optTitle,[data-kana]';
+// つかえる もじ：ひらがな・カタカナ・すうじ と くとうてんなど（、。ー！？「」・くうはく・かいぎょう）。かんじ・ABC・ほかの きごうは とる
+const NOT_OK = /[^\u3041-\u3096\u30A1-\u30F6ー0-9０-９、。，．,.！？!?「」 　\n]/gu;
+const stripKanji = s => s.replace(NOT_OK, '');
 let kanjiToastAt = 0;
 function dropKanji(e) {
   const t = e.target;
   if (!t.matches || !t.matches(KANA_ONLY) || (e.type === 'input' && e.isComposing)) return;
-  const v = t.value, nv = stripKanji(v);
+  const v = t.value, conv = t.matches(SCRIPT_FIELD) ? dsp : (x => x), nv = conv(stripKanji(v));
   if (nv === v) return;
-  // カーソルの まえで けした かずだけ もどす
-  const at = t.selectionStart == null ? nv.length : t.selectionStart - (v.slice(0, t.selectionStart).length - stripKanji(v.slice(0, t.selectionStart)).length);
+  // カーソルの まえで けした かずだけ もどす（ひらがな⇔カタカナは おなじ ながさ）
+  const at = t.selectionStart == null ? nv.length : stripKanji(v.slice(0, t.selectionStart)).length;
+  const hadKanji = stripKanji(v) !== v;
   t.value = nv;
   try { t.setSelectionRange(at, at); } catch (_) {}
-  if (Date.now() - kanjiToastAt > 2500) { kanjiToastAt = Date.now(); toast('かんじは つかえません。ひらがなで うってね'); }
+  if (hadKanji && Date.now() - kanjiToastAt > 2500) { kanjiToastAt = Date.now(); toast(`かんじや ABC は つかえません。${KATA() && conv === dsp ? 'カタカナ' : 'ひらがな'}・すうじで うってね`); }
   // へんかんが おわった ときは、アプリの ほうにも あたらしい なかみを しらせる
   if (e.type === 'compositionend') t.dispatchEvent(new Event('input', { bubbles: true }));
 }
-// とらえる だんかい（capture）で さきに とりのぞくので、それぞれの らんの しょりは かんじの ない なかみを うけとる
+// とらえる だんかい（capture）で さきに なおすので、それぞれの らんの しょりは なおした なかみを うけとる
 document.addEventListener('input', dropKanji, true);
 document.addEventListener('compositionend', dropKanji, true);
-// カタカナ→ひらがな
-const kata2hira = s => s.replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
-const normText = s => kata2hira(s).replace(/!/g, '！').replace(/\?/g, '？').replace(/,/g, '、').replace(/\./g, '。');
 
 // ===== 保存（localStorage） =====
 const STORE_KEY = 'bunshoMaker.v1';
 let DB;
-const DEF_SET = { romaji: 'kunrei', guide: 2, finger: false, sound: true, keyCase: 'lower', glyphModel: true, input: 'kana', showBig: false, chunk: 'auto', speakPick: true, advance: 'auto09' };
+const DEF_SET = { romaji: 'kunrei', guide: 2, finger: false, sound: true, keyCase: 'lower', glyphModel: true, input: 'kana', showBig: false, chunk: 'auto', speakPick: true, advance: 'auto09', script: 'hira', scriptKey: true };
 const S = () => P().settings || (P().settings = Object.assign({}, DEF_SET));
 function newProfile(name) {
   return { id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name, glyphs: {}, words: {}, doc: [], works: [] };
