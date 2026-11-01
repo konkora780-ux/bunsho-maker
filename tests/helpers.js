@@ -37,6 +37,8 @@ async function run() {
   for (const t of tests) {
     try { await t.fn(browser); console.log('✓', t.name); }
     catch (e) { fail++; console.log('✗', t.name, '\n ', e.message); }
+    // テストごとに がめんを とじる（ひらいた ままだと ブラウザの メモリが ふえつづけ、WebKit が とちゅうで おちる ことが ある）
+    for (const c of browser.contexts()) await c.close().catch(() => {});
   }
   await browser.close(); server.close();
   return fail;
