@@ -78,3 +78,32 @@ test('11-4 P1 おなじ ぶんしょうの べつの ひとに「つかうひと
   // おなじ ひとの なかで はなれて もどる だけなら、まえの とりけしは まだ きく（11-1 と おなじ）
   noErr(pg);
 });
+
+test('11-5 P1 ひらけない まえの かたちの てがき さくひんを えらんでも、ほぞんに しっぱいして もとに もどっても、もとの らんの とりけしで ふるい かんじが もどる', async b => {
+  const pg = await openPage(b);
+  await pg.evaluate(() => {
+    S().script = 'hira'; P().doc = ['学校へ。']; const W = o => Object.assign({}, clone(FIN_DEF), { date: new Date().toISOString(), conn: false, nameText: 'た' }, o);
+    P().works = [W({ id: 'wold', text: 'あ', mode: 'hand', hand: [[[0, 0], [1, 1]]] }), W({ id: 'wok', text: 'い' })];
+    saveDB(); show('make'); $('#docEdit').closest('details').open = true;
+  });
+  await pg.locator('#docEdit').focus();
+  await pg.evaluate(() => $('#docEdit').setSelectionRange(0, 1));
+  await pg.keyboard.press('Backspace');
+  eq(await val(pg), '校へ。');
+  // ひらけない さくひん
+  await pg.evaluate(() => openWork(P().works[0]));
+  eq(await pg.evaluate(() => P().doc), ['学校へ。']);
+  await pg.locator('#docEdit').focus();
+  await pg.keyboard.press('ControlOrMeta+z');
+  eq(await val(pg), '学校へ。');
+  // ほぞんに しっぱいして もとに もどる（ひらく・したがきに もどす）ときも、さぎょうの ばんごうは かわらない（らんの きおくを おぼえなおさない）
+  const r = await pg.evaluate(() => {
+    const ep = fieldEpoch, sv = saveDB; saveDB = () => false;
+    try { openWork(P().works[1]); const a = fieldEpoch; P().draft = { date: new Date().toISOString(), doc: ['う'], hand: {}, fin: clone(fin), mk: clone(mk) }; restoreDraft(); return [ep === a, ep === fieldEpoch, P().doc]; }
+    finally { saveDB = sv; }
+  });
+  eq(r, [true, true, ['学校へ。']]);
+  // ふつうに ひらけた ときは ばんごうが すすむ
+  eq(await pg.evaluate(() => { const ep = fieldEpoch; openWork(P().works[1]); return fieldEpoch > ep; }), true);
+  noErr(pg);
+});

@@ -2344,9 +2344,10 @@ function putState(st) {
   if (!(mk.editIdx >= 0 && mk.editIdx < p.doc.length)) delete mk.editIdx;
 }
 function openWork(w) {
-  newWork();
-  // まえの かたちの てがき（シートに じかに かいた せん）は、いまの てがきに うつせないので ひらかない（いちらん・まとめPDF では みられる）
+  // まえの かたちの てがき（シートに じかに かいた せん）は、いまの てがきに うつせないので ひらかない（いちらん・まとめPDF では みられる）。
+  // ひらかない ときは さぎょうも かわらないので、らんの きおく（とりけしで もどせる ふるい もじ）は そのまま
   if (Array.isArray(w.hand) && w.hand.length) return toast('この さくひんは まえの かたちの てがきなので ひらけません。いちらんと まとめPDF では そのまま みられます（さくひんは きえていません）');
+  const ep0 = fieldEpoch; newWork();
   // ひらく まえに、いまの ないようを したがきに のこす（あとで もどせる）
   const before = takeState(), oldDraft = P().draft;
   // ぶんしょう・てがき・つくりかけの ぶん（えらんだ ことば・かいている とちゅう・なおしている ぶん）の どれかが あれば のこす
@@ -2363,15 +2364,16 @@ function openWork(w) {
   // ほぞんした ときの もじ・なまえで ひらく（ぶんしょうを かえるまで）
   fin.snap = { id: w.id, text: w.text, title: typeof w.title === 'string' ? w.title : '', nameText: w.nameText || P().name, glyphs: w.glyphs ? clone(w.glyphs) : null };
   P().hand = w.hand && !Array.isArray(w.hand) ? clone(w.hand) : {};
-  if (!saveDB()) { putState(before); if (oldDraft) P().draft = oldDraft; else delete P().draft; renderFinish(); return toast('ほぞんする ばしょが たりず、ひらけませんでした'); }
+  // ひらけなかった ときは もとの さぎょうに もどる（らんの きおくの ばんごうも もとに もどす）
+  if (!saveDB()) { putState(before); fieldEpoch = ep0; if (oldDraft) P().draft = oldDraft; else delete P().draft; renderFinish(); return toast('ほぞんする ばしょが たりず、ひらけませんでした'); }
   renderFinish(); window.scrollTo(0, 0); toast(P().draft === before ? 'ひらきました（まえの ないようは したがきに のこしました）' : 'ひらきました');
 }
 function restoreDraft() {
   const d = P().draft; if (!d) return;
   // いまの ないようと いれかえる（もういちど おすと もとに もどる）
-  const now = takeState();
+  const now = takeState(), ep0 = fieldEpoch;
   putState(d); P().draft = now;
-  if (!saveDB()) { putState(now); P().draft = d; renderFinish(); return toast('ほぞんする ばしょが たりず、もどせませんでした'); }
+  if (!saveDB()) { putState(now); fieldEpoch = ep0; P().draft = d; renderFinish(); return toast('ほぞんする ばしょが たりず、もどせませんでした'); }
   renderFinish(); toast('したがきに もどしました');
 }
 $('#btnSnapOff').addEventListener('click', () => { delete fin.snap; saveDB(); renderFinish(); });
