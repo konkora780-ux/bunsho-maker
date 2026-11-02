@@ -167,7 +167,7 @@ function loadSentence() {
 }
 function nextSentence() { clearTimeout(ty.timer); if (ty.done && ty.si < ty.sents.length - 1) { ty.si++; loadSentence(); } }
 const allDone = () => ty.done && ty.si >= ty.sents.length - 1;
-function finishTyping() { ty.done = true; ty.ui = ty.units.length; }
+function finishTyping() { ty.done = true; ty.ui = ty.units.length; if (ty.n) starPop(); }
 let audioCtx = null;
 function beep(ok) {
   if (!S().sound) return;
