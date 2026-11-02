@@ -363,7 +363,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-vis
       <button class="btn small" id="btnCuts">✂ くぎりを なおす</button>
       <label class="hint">つぎへの すすみかた <select id="optAdvance"><option value="auto09">すぐ じどうで（0.9びょう）</option><option value="auto2">ゆっくり じどうで（2びょう）</option><option value="manual">じぶんで「つぎへ」を おす</option></select></label>
       <label class="hint"><input type="checkbox" id="optBig"> 1もじを おおきく だす</label>
-      <label class="hint"><input type="checkbox" id="optSound"> おと</label>
+      <label class="hint">おと <select id="optSound"><option value="beep">でんしおん</option><option value="voice">よみあげ（うった もじを よむ）</option><option value="off">なし</option></select></label>
       </div>
     </div>
   </section>
@@ -516,7 +516,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-vis
   <div id="printArea"></div>
 </main>
 <!-- 更新日: アプリを直したら、ここの日付を書きかえる（最新版が反映されたかの目印。せんせいモードだけ表示） -->
-<div class="app-version tonly">更新日 2026-11-02</div>
+<div class="app-version tonly">更新日 2026-11-03</div>
 
 <script>
 // ===== 共通 =====
@@ -623,7 +623,7 @@ document.addEventListener('compositionend', dropKanji, true);
 // ===== 保存（localStorage） =====
 const STORE_KEY = 'bunshoMaker.v1';
 let DB;
-const DEF_SET = { romaji: 'kunrei', guide: 2, finger: false, sound: true, keyCase: 'lower', glyphModel: true, input: 'kana', showBig: false, chunk: 'auto', speakPick: true, advance: 'auto09', script: 'hira', scriptKey: true };
+const DEF_SET = { romaji: 'kunrei', guide: 2, finger: false, sound: 'beep', keyCase: 'lower', glyphModel: true, input: 'kana', showBig: false, chunk: 'auto', speakPick: true, advance: 'auto09', script: 'hira', scriptKey: true };
 const S = () => P().settings || (P().settings = Object.assign({}, DEF_SET));
 function newProfile(name) {
   return { id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name, glyphs: {}, words: {}, doc: [], works: [] };
@@ -1333,7 +1333,7 @@ function startTyping() {
   loadSentence();
   $('#optFinger').checked = S().finger;
   $('#optGuide').value = String(S().guide);
-  $('#optSound').checked = S().sound;
+  $('#optSound').value = S().sound;
   $('#optInput').value = S().input;
   $('#optBig').checked = S().showBig;
   $('#optChunk').value = S().chunk;
@@ -1358,7 +1358,7 @@ function inputKey(ch) {
   ty.miss++; beep(false); return 'ng';
 }
 function completeUnit() {
-  ty.units[ty.ui].typed = ty.buf; ty.buf = ''; ty.ui++;
+  const u = ty.units[ty.ui]; u.typed = ty.buf; ty.buf = ''; ty.ui++; sayCh(u.kana);
   skipAuto();
 }
 function loadSentence() {
@@ -1373,8 +1373,14 @@ function nextSentence() { clearTimeout(ty.timer); if (ty.done && ty.si < ty.sent
 const allDone = () => ty.done && ty.si >= ty.sents.length - 1;
 function finishTyping() { ty.done = true; ty.ui = ty.units.length; if (ty.n) starPop(); }
 let audioCtx = null;
+// おと＝よみあげ：ただしく うてた もじを よむ（まちがいは ひくい おとだけ）
+const SAY_NAME = { '　': 'くうはく', ' ': 'くうはく', 'ー': 'のばす ぼう', '、': 'てん', '。': 'まる', '！': 'びっくり', '？': 'はてな', '「': 'かぎ', '」': 'かぎ とじ' };
+function sayCh(c) {
+  if (S().sound !== 'voice' || !c || c === '\n') return;
+  speak(SAY_NAME[c] || dsp(c));
+}
 function beep(ok) {
-  if (!S().sound) return;
+  if (S().sound === 'off' || (ok && S().sound === 'voice')) return;
   try {
     audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
@@ -1555,7 +1561,7 @@ function inputKana(k) {
   if (!ty || ty.done) return;
   if (!ty.start) ty.start = Date.now();
   const u = ty.units[ty.ui];
-  const done = () => { ty.pend = null; ty.units[ty.ui].typed = u.kana; ty.ui++; skipAuto(); beep(true); return 'ok'; };
+  const done = () => { ty.pend = null; ty.units[ty.ui].typed = u.kana; ty.ui++; sayCh(u.kana); skipAuto(); beep(true); return 'ok'; };
   if (k === 'MOD') {
     if (!ty.pend) return 'none';
     const l = CYCLE[u.base] || [u.base];
@@ -1564,7 +1570,7 @@ function inputKana(k) {
     beep(true); return 'ok';
   }
   if (k === u.kana || (k === ' ' && u.kana === '　')) return done();
-  if (k === u.base) { ty.pend = k; beep(true); return 'ok'; }
+  if (k === u.base) { ty.pend = k; beep(true); return 'ok'; }  // ゛・゜・小さい もじは できあがって から よむ
   ty.miss++; beep(false); return 'ng';
 }
 // ハードウェアキーボードなどで「が」が そのまま きたときも そのまま せいかい
@@ -1649,7 +1655,7 @@ $('#btnCuts').addEventListener('click', () => {
 });
 $('#optChunk').addEventListener('change', e => { S().chunk = e.target.value; saveDB(); startTyping(); });
 $('#optBig').addEventListener('change', e => { S().showBig = e.target.checked; saveDB(); renderBig(); });
-$('#optSound').addEventListener('change', e => { S().sound = e.target.checked; saveDB(); });
+$('#optSound').addEventListener('change', e => { S().sound = e.target.value; saveDB(); });
 
 // ===== 線をえがく共通処理 =====
 function drawStrokes(ctx, strokes, ox, oy, size, lw, color) {
@@ -2679,7 +2685,7 @@ function cleanShow(v) {
 function cleanSettings(v) {
   const o = obj(v), d = DEF_SET;
   return {
-    romaji: pick(o.romaji, ['kunrei', 'hepburn'], d.romaji), guide: pick(o.guide, [0, 1, 2], d.guide), finger: bool(o.finger, d.finger), sound: bool(o.sound, d.sound),
+    romaji: pick(o.romaji, ['kunrei', 'hepburn'], d.romaji), guide: pick(o.guide, [0, 1, 2], d.guide), finger: bool(o.finger, d.finger), sound: pick(o.sound === true ? 'beep' : o.sound === false ? 'off' : o.sound, ['beep', 'voice', 'off'], d.sound),
     keyCase: pick(o.keyCase, ['lower', 'upper'], d.keyCase), glyphModel: bool(o.glyphModel, d.glyphModel), input: pick(o.input, ['kana', 'roma'], d.input),
     showBig: bool(o.showBig, d.showBig), chunk: pick(o.chunk, ['auto', 'ten', 'sent', 'all'], d.chunk), speakPick: bool(o.speakPick, d.speakPick),
     advance: pick(o.advance, ['auto09', 'auto2', 'manual'], d.advance), script: pick(o.script, ['hira', 'kata'], d.script), scriptKey: bool(o.scriptKey, d.scriptKey), show: cleanShow(o.show),

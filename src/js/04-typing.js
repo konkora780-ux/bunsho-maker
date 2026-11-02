@@ -129,7 +129,7 @@ function startTyping() {
   loadSentence();
   $('#optFinger').checked = S().finger;
   $('#optGuide').value = String(S().guide);
-  $('#optSound').checked = S().sound;
+  $('#optSound').value = S().sound;
   $('#optInput').value = S().input;
   $('#optBig').checked = S().showBig;
   $('#optChunk').value = S().chunk;
@@ -154,7 +154,7 @@ function inputKey(ch) {
   ty.miss++; beep(false); return 'ng';
 }
 function completeUnit() {
-  ty.units[ty.ui].typed = ty.buf; ty.buf = ''; ty.ui++;
+  const u = ty.units[ty.ui]; u.typed = ty.buf; ty.buf = ''; ty.ui++; sayCh(u.kana);
   skipAuto();
 }
 function loadSentence() {
@@ -169,8 +169,14 @@ function nextSentence() { clearTimeout(ty.timer); if (ty.done && ty.si < ty.sent
 const allDone = () => ty.done && ty.si >= ty.sents.length - 1;
 function finishTyping() { ty.done = true; ty.ui = ty.units.length; if (ty.n) starPop(); }
 let audioCtx = null;
+// おと＝よみあげ：ただしく うてた もじを よむ（まちがいは ひくい おとだけ）
+const SAY_NAME = { '　': 'くうはく', ' ': 'くうはく', 'ー': 'のばす ぼう', '、': 'てん', '。': 'まる', '！': 'びっくり', '？': 'はてな', '「': 'かぎ', '」': 'かぎ とじ' };
+function sayCh(c) {
+  if (S().sound !== 'voice' || !c || c === '\n') return;
+  speak(SAY_NAME[c] || dsp(c));
+}
 function beep(ok) {
-  if (!S().sound) return;
+  if (S().sound === 'off' || (ok && S().sound === 'voice')) return;
   try {
     audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
@@ -351,7 +357,7 @@ function inputKana(k) {
   if (!ty || ty.done) return;
   if (!ty.start) ty.start = Date.now();
   const u = ty.units[ty.ui];
-  const done = () => { ty.pend = null; ty.units[ty.ui].typed = u.kana; ty.ui++; skipAuto(); beep(true); return 'ok'; };
+  const done = () => { ty.pend = null; ty.units[ty.ui].typed = u.kana; ty.ui++; sayCh(u.kana); skipAuto(); beep(true); return 'ok'; };
   if (k === 'MOD') {
     if (!ty.pend) return 'none';
     const l = CYCLE[u.base] || [u.base];
@@ -360,7 +366,7 @@ function inputKana(k) {
     beep(true); return 'ok';
   }
   if (k === u.kana || (k === ' ' && u.kana === '　')) return done();
-  if (k === u.base) { ty.pend = k; beep(true); return 'ok'; }
+  if (k === u.base) { ty.pend = k; beep(true); return 'ok'; }  // ゛・゜・小さい もじは できあがって から よむ
   ty.miss++; beep(false); return 'ng';
 }
 // ハードウェアキーボードなどで「が」が そのまま きたときも そのまま せいかい
@@ -445,4 +451,4 @@ $('#btnCuts').addEventListener('click', () => {
 });
 $('#optChunk').addEventListener('change', e => { S().chunk = e.target.value; saveDB(); startTyping(); });
 $('#optBig').addEventListener('change', e => { S().showBig = e.target.checked; saveDB(); renderBig(); });
-$('#optSound').addEventListener('change', e => { S().sound = e.target.checked; saveDB(); });
+$('#optSound').addEventListener('change', e => { S().sound = e.target.value; saveDB(); });
