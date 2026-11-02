@@ -16,6 +16,8 @@ function renderShowBox() {
   box.append(grp('しあげかた', ...MODE_IDS.map(m => cb(!sh.modes || sh.modes.includes(m), mName[m], (on, i) => listToggle('modes', MODE_IDS, m, on, i))), cb(sh.glyph, 'もじとうろくの ボタン', on => { sh.glyph = on; })));
   box.append(grp('② うってみる', cb(sh.practice, 'にゅうりょくの れんしゅうを する（はずすと ①→③ に すすみます）', on => { sh.practice = on; }),
     cb(sh.stat, 'じかん・ミスの かずを みせる', on => { sh.stat = on; })));
+  box.append(grp('おうえん', cb(sh.buddy, 'えんぴつくんが ヒントを いう（①）', on => { sh.buddy = on; }),
+    cb(sh.star, 'できた ときに ⭐ を だす（ぶんを いれた とき・1ぶん うてた とき）', on => { sh.star = on; })));
   const maxSel = el('select', { 'aria-label': 'ことばの かず' });
   [[0, 'ぜんぶ'], [2, '2こ'], [3, '3こ'], [4, '4こ'], [6, '6こ']].forEach(([v, t]) => maxSel.append(el('option', { value: v }, t)));
   maxSel.value = String(sh.max); maxSel.addEventListener('change', () => { sh.max = +maxSel.value; saveDB(); });
@@ -184,7 +186,7 @@ function cleanShow(v) {
   // 0こ では えらべなく なるので、さいていの 1つに する（せんせいの がめんの「さいごの 1つは はずせない」と おなじ きまり）
   if (sh.tpls && !sh.tpls.length) { sh.tpls = [SHOW_MIN.tpl]; note('「みせるもの」の ぶんの かたが 0こ だったので「がんばったこと」だけに しました'); }
   if (sh.modes && !sh.modes.length) { sh.modes = [SHOW_MIN.mode]; note('「みせるもの」の しあげかたが 0こ だったので「iPadの もじ」だけに しました'); }
-  sh.glyph = bool(o.glyph, true); sh.practice = bool(o.practice, true); sh.stat = bool(o.stat, true); sh.max = pick(o.max, [0, 2, 3, 4, 6], 0);
+  sh.glyph = bool(o.glyph, true); sh.practice = bool(o.practice, true); sh.stat = bool(o.stat, true); sh.buddy = bool(o.buddy, false); sh.star = bool(o.star, false); sh.max = pick(o.max, [0, 2, 3, 4, 6], 0);
   const wl = l => cut([...new Set(arr(l).filter(x => typeof x === 'string').map(x => str(x, 60, '', 'ことば')))], LIM.words, 'かくす・さきに だす ことば');
   Object.keys(SLOTS).forEach(k => { if (obj(o.hide)[k]) sh.hide[k] = wl(o.hide[k]); if (obj(o.pin)[k]) sh.pin[k] = wl(o.pin[k]); });
   return sh;

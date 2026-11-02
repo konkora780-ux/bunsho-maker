@@ -78,13 +78,28 @@ const isStudent = () => DB.role === 'student';
 // null＝ぜんぶ だす、[…]＝えらんだ ものだけ。hide・pin は ひとごとに あたらしく つくる（ひとの あいだで まざらない）
 const MODE_IDS = ['glyph', 'font', 'hand'];
 // practice：②うってみる を つかうか、stat：じかん・ミスの かずを みせるか（じどうせいと モード）
-const showDef = () => ({ tpls: null, modes: null, glyph: true, practice: true, stat: true, hide: {}, pin: {}, max: 0 });
+// buddy：えんぴつくんの ヒント、star：できた ときの ⭐（どちらも はじめは ださない。せんせいが こどもごとに えらぶ）
+const showDef = () => ({ tpls: null, modes: null, glyph: true, practice: true, stat: true, buddy: false, star: false, hide: {}, pin: {}, max: 0 });
 const practiceOn = () => !isStudent() || SH().practice !== false;
 function SH() {
   const s = S();
   if (!s.show) s.show = showDef();
   const d = showDef(); Object.keys(d).forEach(k => { if (s.show[k] === undefined) s.show[k] = d[k]; });
   return s.show;
+}
+// あんないやく「えんぴつくん」：いまの ヒントを ふきだしで いう（えは きまった SVG）
+const BUDDY_SVG = '<svg width="46" height="60" viewBox="0 0 54 70" aria-hidden="true"><polygon points="12,52 42,52 27,68" fill="#f3d19c" stroke="#2a2a2a" stroke-width="2.5"/><polygon points="23,63 31,63 27,68" fill="#2a2a2a"/><rect x="12" y="10" width="30" height="42" rx="4" fill="#ffd23f" stroke="#2a2a2a" stroke-width="2.5"/><rect x="12" y="2" width="30" height="10" rx="4" fill="#f29bb0" stroke="#2a2a2a" stroke-width="2.5"/><circle cx="21" cy="28" r="2.6" fill="#2a2a2a"/><circle cx="33" cy="28" r="2.6" fill="#2a2a2a"/><path d="M21 36 q6 6 12 0" fill="none" stroke="#2a2a2a" stroke-width="2.5" stroke-linecap="round"/></svg>';
+function hintEl(text) {
+  if (!SH().buddy) return el('div', { class: 'hint' }, text);
+  const pic = el('span', { class: 'buddy-pic' }); pic.innerHTML = BUDDY_SVG;
+  return el('div', { class: 'buddy' }, pic, el('div', { class: 'bubble' }, text));
+}
+// できた ときの ⭐：1かい だけ でて きえる（うごきを へらす せっていでは うごかない）
+function starPop() {
+  if (!SH().star) return;
+  $$('.starpop').forEach(x => x.remove());
+  const s = el('div', { class: 'starpop', 'aria-hidden': 'true' }, '⭐');
+  document.body.append(s); setTimeout(() => s.remove(), 1400);
 }
 // 0こに なった ときの さいていの 1つ（よみこみ・きどう・がめんで おなじ きまり）
 const SHOW_MIN = { tpl: 'gamba', mode: 'font' };
@@ -183,7 +198,7 @@ const DYN = {
 function renderChooser(key, idx) {
   const ch = $('#chooser'); ch.innerHTML = '';
   const slot = SLOTS[key];
-  ch.append(el('div', { class: 'hint' }, slot.q + ' を えらんでね'));
+  ch.append(hintEl(slot.q + ' を えらんでね'));
   const box = el('div', { class: 'chips' });
   const pick = w => {
     if (S().speakPick) speak(w);
@@ -404,7 +419,7 @@ $('#btnAddSent').addEventListener('click', () => {
     const p = P(), id = p.docIds[at]; p.lineSrc = p.lineSrc || {};
     if (src) p.lineSrc[id] = src; else delete p.lineSrc[id];
     mk.vals = {}; mk.active = null; mk.free = ''; delete mk.editIdx;
-    renderFrame(); renderDoc(); if (saveDB()) toast(ed ? 'なおしました！' : 'いれました！');
+    renderFrame(); renderDoc(); if (saveDB()) { toast(ed ? 'なおしました！' : 'いれました！'); if (!ed) starPop(); }
   });
 });
 $('#btnClearSlots').addEventListener('click', () => { mk.vals = {}; mk.active = null; mk.free = ''; delete mk.editIdx; renderFrame(); });

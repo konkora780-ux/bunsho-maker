@@ -262,6 +262,16 @@ button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-vis
 @keyframes ngflash{0%,100%{box-shadow:none}30%{box-shadow:0 0 0 5px var(--ng)}}
 /* いんさつ：がめん用の ほうがんと いろを けして しろに する */
 @media print{body{background:#fff!important;background-image:none!important}}
+/* ===== おうえん（2026-11-02）：えんぴつくんの ふきだし・できた ときの ⭐（せんせいが こどもごとに だす／ださない） ===== */
+.buddy{display:flex;align-items:flex-end;gap:10px;margin:4px 0}
+.buddy-pic{flex:none;display:block;line-height:0}
+.bubble{position:relative;background:#fff;border:3px solid var(--pen,#2a2a2a);border-radius:18px;padding:8px 14px;font-family:var(--f-model);font-size:20px;color:var(--ink)}
+.bubble::before{content:"";position:absolute;left:-13px;bottom:12px;border:8px solid transparent;border-right-color:var(--pen,#2a2a2a)}
+.starpop{position:fixed;left:50%;top:calc(30% + env(safe-area-inset-top,0px));transform:translateX(-50%);font-size:88px;line-height:1;z-index:65;pointer-events:none;animation:starpop 1.2s ease-out 1 forwards}
+@keyframes starpop{0%{opacity:0;transform:translate(-50%,16px) scale(.6)}30%{opacity:1;transform:translate(-50%,-14px) scale(1.15)}70%{opacity:1;transform:translate(-50%,0) scale(1)}100%{opacity:0;transform:translate(-50%,0) scale(1)}}
+@keyframes starfade{0%,70%{opacity:1}100%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.starpop{animation:starfade 1.2s linear 1 forwards;transform:translateX(-50%)}}
+@media print{.starpop{display:none!important}}
 </style>
 
 <header class="top">
@@ -824,13 +834,28 @@ const isStudent = () => DB.role === 'student';
 // null＝ぜんぶ だす、[…]＝えらんだ ものだけ。hide・pin は ひとごとに あたらしく つくる（ひとの あいだで まざらない）
 const MODE_IDS = ['glyph', 'font', 'hand'];
 // practice：②うってみる を つかうか、stat：じかん・ミスの かずを みせるか（じどうせいと モード）
-const showDef = () => ({ tpls: null, modes: null, glyph: true, practice: true, stat: true, hide: {}, pin: {}, max: 0 });
+// buddy：えんぴつくんの ヒント、star：できた ときの ⭐（どちらも はじめは ださない。せんせいが こどもごとに えらぶ）
+const showDef = () => ({ tpls: null, modes: null, glyph: true, practice: true, stat: true, buddy: false, star: false, hide: {}, pin: {}, max: 0 });
 const practiceOn = () => !isStudent() || SH().practice !== false;
 function SH() {
   const s = S();
   if (!s.show) s.show = showDef();
   const d = showDef(); Object.keys(d).forEach(k => { if (s.show[k] === undefined) s.show[k] = d[k]; });
   return s.show;
+}
+// あんないやく「えんぴつくん」：いまの ヒントを ふきだしで いう（えは きまった SVG）
+const BUDDY_SVG = '<svg width="46" height="60" viewBox="0 0 54 70" aria-hidden="true"><polygon points="12,52 42,52 27,68" fill="#f3d19c" stroke="#2a2a2a" stroke-width="2.5"/><polygon points="23,63 31,63 27,68" fill="#2a2a2a"/><rect x="12" y="10" width="30" height="42" rx="4" fill="#ffd23f" stroke="#2a2a2a" stroke-width="2.5"/><rect x="12" y="2" width="30" height="10" rx="4" fill="#f29bb0" stroke="#2a2a2a" stroke-width="2.5"/><circle cx="21" cy="28" r="2.6" fill="#2a2a2a"/><circle cx="33" cy="28" r="2.6" fill="#2a2a2a"/><path d="M21 36 q6 6 12 0" fill="none" stroke="#2a2a2a" stroke-width="2.5" stroke-linecap="round"/></svg>';
+function hintEl(text) {
+  if (!SH().buddy) return el('div', { class: 'hint' }, text);
+  const pic = el('span', { class: 'buddy-pic' }); pic.innerHTML = BUDDY_SVG;
+  return el('div', { class: 'buddy' }, pic, el('div', { class: 'bubble' }, text));
+}
+// できた ときの ⭐：1かい だけ でて きえる（うごきを へらす せっていでは うごかない）
+function starPop() {
+  if (!SH().star) return;
+  $$('.starpop').forEach(x => x.remove());
+  const s = el('div', { class: 'starpop', 'aria-hidden': 'true' }, '⭐');
+  document.body.append(s); setTimeout(() => s.remove(), 1400);
 }
 // 0こに なった ときの さいていの 1つ（よみこみ・きどう・がめんで おなじ きまり）
 const SHOW_MIN = { tpl: 'gamba', mode: 'font' };
@@ -929,7 +954,7 @@ const DYN = {
 function renderChooser(key, idx) {
   const ch = $('#chooser'); ch.innerHTML = '';
   const slot = SLOTS[key];
-  ch.append(el('div', { class: 'hint' }, slot.q + ' を えらんでね'));
+  ch.append(hintEl(slot.q + ' を えらんでね'));
   const box = el('div', { class: 'chips' });
   const pick = w => {
     if (S().speakPick) speak(w);
@@ -1150,7 +1175,7 @@ $('#btnAddSent').addEventListener('click', () => {
     const p = P(), id = p.docIds[at]; p.lineSrc = p.lineSrc || {};
     if (src) p.lineSrc[id] = src; else delete p.lineSrc[id];
     mk.vals = {}; mk.active = null; mk.free = ''; delete mk.editIdx;
-    renderFrame(); renderDoc(); if (saveDB()) toast(ed ? 'なおしました！' : 'いれました！');
+    renderFrame(); renderDoc(); if (saveDB()) { toast(ed ? 'なおしました！' : 'いれました！'); if (!ed) starPop(); }
   });
 });
 $('#btnClearSlots').addEventListener('click', () => { mk.vals = {}; mk.active = null; mk.free = ''; delete mk.editIdx; renderFrame(); });
@@ -1346,7 +1371,7 @@ function loadSentence() {
 }
 function nextSentence() { clearTimeout(ty.timer); if (ty.done && ty.si < ty.sents.length - 1) { ty.si++; loadSentence(); } }
 const allDone = () => ty.done && ty.si >= ty.sents.length - 1;
-function finishTyping() { ty.done = true; ty.ui = ty.units.length; }
+function finishTyping() { ty.done = true; ty.ui = ty.units.length; if (ty.n) starPop(); }
 let audioCtx = null;
 function beep(ok) {
   if (!S().sound) return;
@@ -2474,6 +2499,8 @@ function renderShowBox() {
   box.append(grp('しあげかた', ...MODE_IDS.map(m => cb(!sh.modes || sh.modes.includes(m), mName[m], (on, i) => listToggle('modes', MODE_IDS, m, on, i))), cb(sh.glyph, 'もじとうろくの ボタン', on => { sh.glyph = on; })));
   box.append(grp('② うってみる', cb(sh.practice, 'にゅうりょくの れんしゅうを する（はずすと ①→③ に すすみます）', on => { sh.practice = on; }),
     cb(sh.stat, 'じかん・ミスの かずを みせる', on => { sh.stat = on; })));
+  box.append(grp('おうえん', cb(sh.buddy, 'えんぴつくんが ヒントを いう（①）', on => { sh.buddy = on; }),
+    cb(sh.star, 'できた ときに ⭐ を だす（ぶんを いれた とき・1ぶん うてた とき）', on => { sh.star = on; })));
   const maxSel = el('select', { 'aria-label': 'ことばの かず' });
   [[0, 'ぜんぶ'], [2, '2こ'], [3, '3こ'], [4, '4こ'], [6, '6こ']].forEach(([v, t]) => maxSel.append(el('option', { value: v }, t)));
   maxSel.value = String(sh.max); maxSel.addEventListener('change', () => { sh.max = +maxSel.value; saveDB(); });
@@ -2642,7 +2669,7 @@ function cleanShow(v) {
   // 0こ では えらべなく なるので、さいていの 1つに する（せんせいの がめんの「さいごの 1つは はずせない」と おなじ きまり）
   if (sh.tpls && !sh.tpls.length) { sh.tpls = [SHOW_MIN.tpl]; note('「みせるもの」の ぶんの かたが 0こ だったので「がんばったこと」だけに しました'); }
   if (sh.modes && !sh.modes.length) { sh.modes = [SHOW_MIN.mode]; note('「みせるもの」の しあげかたが 0こ だったので「iPadの もじ」だけに しました'); }
-  sh.glyph = bool(o.glyph, true); sh.practice = bool(o.practice, true); sh.stat = bool(o.stat, true); sh.max = pick(o.max, [0, 2, 3, 4, 6], 0);
+  sh.glyph = bool(o.glyph, true); sh.practice = bool(o.practice, true); sh.stat = bool(o.stat, true); sh.buddy = bool(o.buddy, false); sh.star = bool(o.star, false); sh.max = pick(o.max, [0, 2, 3, 4, 6], 0);
   const wl = l => cut([...new Set(arr(l).filter(x => typeof x === 'string').map(x => str(x, 60, '', 'ことば')))], LIM.words, 'かくす・さきに だす ことば');
   Object.keys(SLOTS).forEach(k => { if (obj(o.hide)[k]) sh.hide[k] = wl(o.hide[k]); if (obj(o.pin)[k]) sh.pin[k] = wl(o.pin[k]); });
   return sh;

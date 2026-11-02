@@ -10,6 +10,7 @@ require('./p1b.test');
 require('./p3.test');
 require('./p4.test');
 require('./p5.test');
+require('./ouen.test');
 require('./p6.test');
 require('./p7.test');
 require('./p8.test');

@@ -253,6 +253,16 @@ button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-vis
 @keyframes ngflash{0%,100%{box-shadow:none}30%{box-shadow:0 0 0 5px var(--ng)}}
 /* いんさつ：がめん用の ほうがんと いろを けして しろに する */
 @media print{body{background:#fff!important;background-image:none!important}}
+/* ===== おうえん（2026-11-02）：えんぴつくんの ふきだし・できた ときの ⭐（せんせいが こどもごとに だす／ださない） ===== */
+.buddy{display:flex;align-items:flex-end;gap:10px;margin:4px 0}
+.buddy-pic{flex:none;display:block;line-height:0}
+.bubble{position:relative;background:#fff;border:3px solid var(--pen,#2a2a2a);border-radius:18px;padding:8px 14px;font-family:var(--f-model);font-size:20px;color:var(--ink)}
+.bubble::before{content:"";position:absolute;left:-13px;bottom:12px;border:8px solid transparent;border-right-color:var(--pen,#2a2a2a)}
+.starpop{position:fixed;left:50%;top:calc(30% + env(safe-area-inset-top,0px));transform:translateX(-50%);font-size:88px;line-height:1;z-index:65;pointer-events:none;animation:starpop 1.2s ease-out 1 forwards}
+@keyframes starpop{0%{opacity:0;transform:translate(-50%,16px) scale(.6)}30%{opacity:1;transform:translate(-50%,-14px) scale(1.15)}70%{opacity:1;transform:translate(-50%,0) scale(1)}100%{opacity:0;transform:translate(-50%,0) scale(1)}}
+@keyframes starfade{0%,70%{opacity:1}100%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.starpop{animation:starfade 1.2s linear 1 forwards;transform:translateX(-50%)}}
+@media print{.starpop{display:none!important}}
 </style>
 
 <header class="top">
