@@ -556,7 +556,11 @@ const fieldConv = s => halfNum(dsp(s)).replace(/[,，.．!?]/g, c => PUNCT_ALT[c
 // アプリが らんの なかみを かえた（べつの ひと・べつの ぶんしょう）ときは、おぼえなおす
 const BAD1 = new RegExp(NOT_OK.source, 'u');
 const badCount = s => { const m = new Map(); for (const c of s) if (BAD1.test(c)) m.set(c, (m.get(c) || 0) + 1); return m; };
-function rebase(t) { const v = t.value.normalize('NFC'); t._ok = v; t._old = badCount(v); }
+// さぎょうの くぎり（ひとを かえる・さくひんを ひらく・したがきに もどす）で ふえる ばんごう。かわったら らんの なかみが おなじでも おぼえなおす
+let fieldEpoch = 0;
+const newWork = () => { fieldEpoch++; };
+const stale = t => t._ok == null || t._ep !== fieldEpoch || t.value.normalize('NFC') !== t._ok;
+function rebase(t) { const v = t.value.normalize('NFC'); t._ok = v; t._old = badCount(v); t._ep = fieldEpoch; }
 // つかえない もじは、まえから ある かず（old）から、そとがわで つかって いる かず（used）を ひいた ぶん だけ のこす
 function cleanMid(mid, old, used) { const u = new Map(used); let out = ''; for (const c of mid) { if (BAD1.test(c)) { const n = u.get(c) || 0; if ((old.get(c) || 0) <= n) continue; u.set(c, n + 1); } out += c; } return out; }
 let kanjiToastAt = 0;
@@ -564,14 +568,15 @@ let kanjiToastAt = 0;
 function markPre(e) {
   const t = e.target; if (!t.matches || !t.matches(KANA_ONLY)) return;
   if (e.type === 'compositionstart') t._comp = true; else if (t._comp || e.isComposing) return;
-  if (t._ok == null || t.value.normalize('NFC') !== t._ok) rebase(t);
+  if (stale(t)) rebase(t);
   t._pre = t.value;
 }
 function dropKanji(e) {
   const t = e.target;
   if (!t.matches || !t.matches(KANA_ONLY) || (e.type === 'input' && e.isComposing)) return;
   if (e.type === 'compositionend') t._comp = false;
-  if (!t._old) t._old = new Map();
+  // まえの さぎょうの きおくは つかわない（かわる まえの なかみが わからない ときは、まえから ある もじは ない ものと する）
+  if (!t._old || t._ep !== fieldEpoch) { if (t._pre == null) t._ok = ''; t._old = badCount((t._pre != null ? t._pre : '').normalize('NFC')); t._ep = fieldEpoch; }
   const v0 = t.value, v = v0.normalize('NFC'), prev = (t._pre != null ? t._pre : t._ok != null ? t._ok : '').normalize('NFC');
   t._pre = null;
   // あたらしく はいった ところ（まえと おなじ はじめ・おわりを のぞいた まんなか）
@@ -598,7 +603,7 @@ function dropKanji(e) {
   if (e.type === 'compositionend') t.dispatchEvent(new Event('input', { bubbles: true }));
 }
 // フォーカスした とき：アプリが なかみを かえて いたら おぼえなおす（おなじ さぎょうの なかで はなれて もどった だけなら そのまま）
-document.addEventListener('focusin', e => { const t = e.target; if (t.matches && t.matches(KANA_ONLY) && (t._ok == null || t.value.normalize('NFC') !== t._ok)) rebase(t); }, true);
+document.addEventListener('focusin', e => { const t = e.target; if (t.matches && t.matches(KANA_ONLY) && stale(t)) rebase(t); }, true);
 document.addEventListener('beforeinput', markPre, true);
 document.addEventListener('compositionstart', markPre, true);
 // とらえる だんかい（capture）で さきに なおすので、それぞれの らんの しょりは なおした なかみを うけとる
@@ -1710,6 +1715,7 @@ let fin = Object.assign({}, FIN_DEF);
 let brMode = false; // かいぎょうを なおす モード
 // ひとを かえたら、そのひとの しあげかた（フォント・むき など）に きりかえる
 function bindProfile() {
+  newWork();
   fin = P().fin = Object.assign({}, FIN_DEF, P().fin); fin.hi = 0; fin.page = 0;
   // つくりかけの ぶんも ひとごとに
   mk = P().mk = Object.assign({ tpl: 'gamba', vals: {}, active: null, free: '' }, P().mk);
@@ -2303,6 +2309,7 @@ function takeState() {
   return st;
 }
 function putState(st) {
+  newWork();
   const p = P();
   p.doc = st.doc.slice(); p.hand = clone(st.hand || {});
   WORK_KEYS.forEach(k => { if (st[k] !== undefined) p[k] = clone(st[k]); else delete p[k]; });
@@ -2312,6 +2319,7 @@ function putState(st) {
   if (!(mk.editIdx >= 0 && mk.editIdx < p.doc.length)) delete mk.editIdx;
 }
 function openWork(w) {
+  newWork();
   // まえの かたちの てがき（シートに じかに かいた せん）は、いまの てがきに うつせないので ひらかない（いちらん・まとめPDF では みられる）
   if (Array.isArray(w.hand) && w.hand.length) return toast('この さくひんは まえの かたちの てがきなので ひらけません。いちらんと まとめPDF では そのまま みられます（さくひんは きえていません）');
   // ひらく まえに、いまの ないようを したがきに のこす（あとで もどせる）

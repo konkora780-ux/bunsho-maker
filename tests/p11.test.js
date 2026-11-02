@@ -56,3 +56,25 @@ test('11-3 P1 あたらしく うった かんじは、はなれて もどって
   eq(await val(pg), '学学あ');
   noErr(pg);
 });
+
+test('11-4 P1 おなじ ぶんしょうの べつの ひとに「つかうひと」で かえると、まえの ひとの ふるい かんじは みとめない', async b => {
+  const pg = await openPage(b);
+  const bid = await pg.evaluate(() => {
+    const a = P(); a.settings = Object.assign({}, DEF_SET); a.doc = ['学あ'];
+    const nb = newProfile('べつ'); nb.settings = Object.assign({}, DEF_SET); nb.doc = ['あ']; DB.profiles.push(nb); saveDB(); renderWho();
+    show('make'); $('#docEdit').closest('details').open = true; return nb.id;
+  });
+  await pg.locator('#docEdit').focus();
+  await pg.evaluate(() => $('#docEdit').setSelectionRange(0, 1));
+  await pg.keyboard.press('Backspace');
+  eq(await val(pg), 'あ');
+  await pg.selectOption('#whoSel', bid);
+  await pg.evaluate(() => { show('make'); $('#docEdit').closest('details').open = true; });
+  eq(await pg.evaluate(() => [P().name, $('#docEdit').value]), ['べつ', 'あ']);
+  await pg.locator('#docEdit').focus();
+  await pg.evaluate(() => $('#docEdit').setSelectionRange(0, 0));
+  await pg.keyboard.insertText('学');
+  eq(await val(pg), 'あ');
+  // おなじ ひとの なかで はなれて もどる だけなら、まえの とりけしは まだ きく（11-1 と おなじ）
+  noErr(pg);
+});

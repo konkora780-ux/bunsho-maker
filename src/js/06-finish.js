@@ -15,6 +15,7 @@ let fin = Object.assign({}, FIN_DEF);
 let brMode = false; // かいぎょうを なおす モード
 // ひとを かえたら、そのひとの しあげかた（フォント・むき など）に きりかえる
 function bindProfile() {
+  newWork();
   fin = P().fin = Object.assign({}, FIN_DEF, P().fin); fin.hi = 0; fin.page = 0;
   // つくりかけの ぶんも ひとごとに
   mk = P().mk = Object.assign({ tpl: 'gamba', vals: {}, active: null, free: '' }, P().mk);

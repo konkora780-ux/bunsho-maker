@@ -209,6 +209,7 @@ function takeState() {
   return st;
 }
 function putState(st) {
+  newWork();
   const p = P();
   p.doc = st.doc.slice(); p.hand = clone(st.hand || {});
   WORK_KEYS.forEach(k => { if (st[k] !== undefined) p[k] = clone(st[k]); else delete p[k]; });
@@ -218,6 +219,7 @@ function putState(st) {
   if (!(mk.editIdx >= 0 && mk.editIdx < p.doc.length)) delete mk.editIdx;
 }
 function openWork(w) {
+  newWork();
   // まえの かたちの てがき（シートに じかに かいた せん）は、いまの てがきに うつせないので ひらかない（いちらん・まとめPDF では みられる）
   if (Array.isArray(w.hand) && w.hand.length) return toast('この さくひんは まえの かたちの てがきなので ひらけません。いちらんと まとめPDF では そのまま みられます（さくひんは きえていません）');
   // ひらく まえに、いまの ないようを したがきに のこす（あとで もどせる）

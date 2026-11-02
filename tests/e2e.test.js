@@ -44,9 +44,17 @@ test('とおしで うごかす（iPad 6がめん）', async b => {
       const st = await pg.evaluate(() => ({ done: ty.done, all: ty.done && ty.si >= ty.sents.length - 1, k: ty.done ? null : nextKeyKana() }));
       if (st.all) break;
       // じどうで つぎへ すすむ（0.9びょう）と ボタンが きえる ことが あるので、きえたら そのまま つぎへ
-      if (st.done) { await pg.locator('#bigNow button', { hasText: 'つぎへ' }).tap({ timeout: 3000 }).catch(() => {}); continue; }
+      if (st.done) {
+        const si = await pg.evaluate(() => ty.si);
+        // おせなかった ときは、ほんとうに じどうで つぎの ぶんへ すすんだ ときだけ ゆるす
+        await pg.locator('#bigNow button', { hasText: 'つぎへ' }).tap({ timeout: 3000 }).catch(async e => { if (await pg.evaluate(() => ty.si) === si) throw e; });
+        continue;
+      }
       await pg.locator(`#kb .key[data-k="${st.k}"]`).dispatchEvent('pointerdown'); n++;
     }
+    // さいごの ぶんまで おわった ことを たしかめる
+    const fin2 = await pg.evaluate(() => ({ done: ty.done, si: ty.si, n: ty.sents.length }));
+    if (!(fin2.done && fin2.si === fin2.n - 1)) issues.push(`[${name}] typing not finished ${JSON.stringify(fin2)}`);
     const miss = await pg.evaluate(() => ty.miss);
     if (miss) issues.push(`[${name}] typing miss ${miss}`);
     await ovf('type-done');
