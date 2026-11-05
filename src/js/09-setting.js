@@ -194,7 +194,7 @@ function cleanShow(v) {
 function cleanSettings(v) {
   const o = obj(v), d = DEF_SET;
   return {
-    romaji: pick(o.romaji, ['kunrei', 'hepburn'], d.romaji), guide: pick(o.guide, [0, 1, 2], d.guide), finger: bool(o.finger, d.finger), sound: pick(o.sound === true ? 'beep' : o.sound === false ? 'off' : o.sound, ['beep', 'voice', 'off'], d.sound),
+    romaji: pick(o.romaji, ['kunrei', 'hepburn'], d.romaji), guide: pick(o.guide === 2 ? 1 : o.guide, [0, 1], d.guide), finger: bool(o.finger, d.finger), sound: pick(o.sound === true ? 'beep' : o.sound === false ? 'off' : o.sound, ['beep', 'voice', 'off'], d.sound),
     keyCase: pick(o.keyCase, ['lower', 'upper'], d.keyCase), glyphModel: bool(o.glyphModel, d.glyphModel), input: pick(o.input, ['kana', 'roma'], d.input),
     showBig: bool(o.showBig, d.showBig), chunk: pick(o.chunk, ['auto', 'ten', 'sent', 'all'], d.chunk), speakPick: bool(o.speakPick, d.speakPick),
     advance: pick(o.advance, ['auto09', 'auto2', 'manual'], d.advance), script: pick(o.script, ['hira', 'kata'], d.script), scriptKey: bool(o.scriptKey, d.scriptKey), show: cleanShow(o.show),

@@ -55,14 +55,14 @@ test('8-3 かなキーボード：iPad と おなじ ならび、ひだりに 12
   eq(r.wa, ['わ', 'を', 'ん', 'ー', 'MOD']);
   eq(r.a, ['あ', 'い', 'う', 'え', 'お']);
   eq(r.right[1], ' ');
-  // か を うつ → つぎは 3：123 キーが ひかる
+  // か を うつ → つぎは 3（キーは ひからせない：2026-11-05）
   await pg.locator('#kb .key[data-k="か"]').dispatchEvent('pointerdown');
-  eq(await pg.evaluate(() => $('#kb .key[data-k="NUM"]').classList.contains('next')), true);
+  eq(await pg.evaluate(() => $$('#kb .key.next').length), 0);
   await pg.locator('#kb .key[data-k="NUM"]').dispatchEvent('pointerdown');
   eq(await pg.evaluate(() => $$('#kb .knumrow .key').map(k => k.dataset.k).join('')), '1234567890');
   await pg.locator('#kb .key[data-k="3"]').dispatchEvent('pointerdown');
-  // つぎは「。」：ひらがなの キーが ひかる → もどる
-  eq(await pg.evaluate(() => $('#kb .key[data-k="HIRA"]').classList.contains('next')), true);
+  // つぎは「。」：ひらがなの キーに もどる（ひからせない）
+  eq(await pg.evaluate(() => $$('#kb .key.next').length), 0);
   await pg.locator('#kb .key[data-k="HIRA"]').dispatchEvent('pointerdown');
   await pg.locator('#kb .key[data-k="。"]').dispatchEvent('pointerdown');
   eq(await pg.evaluate(() => [ty.done, ty.miss]), [true, 0]);

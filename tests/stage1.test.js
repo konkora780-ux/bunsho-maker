@@ -90,7 +90,7 @@ test('P1-2 へんな データ・おおきすぎる データを よみこんで
       set: [S().guide, S().input, SH().tpls], mk: mk.tpl, docSrc: Object.keys(p.docSrc).length };
   });
   eq(r.name, 'へん'); eq(r.fin, ['font', 0, 10, 0, 'free', [3]]); eq(r.glyphs, []); eq(r.work, [1, 'font', 0, 10]);
-  eq(r.set, [2, 'kana', ['gamba']]); eq(r.mk, 'gamba'); eq(r.docSrc, 0);
+  eq(r.set, [1, 'kana', ['gamba']]); eq(r.mk, 'gamba'); eq(r.docSrc, 0);
   ok((await pg.textContent('.modal')).includes('なおした こと'), 'なおした ことを しらせる');
   await pg.click('.modal >> text=わかった');
   await pg.click('#steps button[data-v=finish]'); await pg.click('#steps button[data-v=make]');
