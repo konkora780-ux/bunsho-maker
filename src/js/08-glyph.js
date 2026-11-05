@@ -7,11 +7,14 @@ const GLYPH_NUM = '0123456789';
 // ひらがな・カタカナ・すうじ ぜんぶ とうろく できる。その ひとの もじの ならびを さきに だす
 const glyphRows = () => { const h = GLYPH_HIRA, k = GLYPH_HIRA.map(hira2kata); return (KATA() ? k.concat(h) : h.concat(k)).concat([GLYPH_NUM, GLYPH_MARKS]); };
 const glyphAll = () => glyphRows().join('').split('');
+// かく せんの ふとさ（3だんかい）。③の「せんの ふとさ」（fin.weight）と おなじ ねだんを つかうので、かいた とおりの ふとさで しあがる
+const GLYPH_W = [[0.05, 'ほそい'], [0.075, 'ふつう'], [0.1, 'ふとい']];
+const glyphW = () => GLYPH_W.reduce((a, b) => Math.abs(b[0] - fin.weight) < Math.abs(a[0] - fin.weight) ? b : a)[0];
 function drawGlyphThumb(cv, ch) {
   const s = 2, n = 44; cv.width = n * s; cv.height = n * s;
   const c = cv.getContext('2d'); c.setTransform(s, 0, 0, s, 0, 0);
   const gl = P().glyphs[ch];
-  if (gl) drawStrokes(c, gl, 2, 2, n - 4, (n - 4) * 0.075, '#1b1b1b');
+  if (gl) drawStrokes(c, gl, 2, 2, n - 4, (n - 4) * glyphW(), '#1b1b1b');
 }
 // いまの ぶんしょうで つかう のに、まだ とうろく していない もじ（でてくる じゅん）
 function neededGlyphs() {
@@ -58,8 +61,8 @@ function openReg(ch, queue) {
       ctx.fillStyle = '#e3eae9'; ctx.font = `${N * 0.8}px "Klee One",serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(ch, N / 2, N / 2 + N * 0.03);
     }
-    drawStrokes(ctx, strokes, 0, 0, N, N * 0.075, '#1b1b1b');
-    if (live) drawStrokes(ctx, [live], 0, 0, N, N * 0.075, '#1b1b1b');
+    drawStrokes(ctx, strokes, 0, 0, N, N * glyphW(), '#1b1b1b');
+    if (live) drawStrokes(ctx, [live], 0, 0, N, N * glyphW(), '#1b1b1b');
   };
   attachDraw(cv, {
     toLogical: (fx, fy) => [fx, fy],
@@ -82,6 +85,11 @@ function openReg(ch, queue) {
   modelCb.addEventListener('change', () => { S().glyphModel = modelCb.checked; saveDB(); paint(); });
   const penCb = el('input', { type: 'checkbox' }); penCb.checked = fin.penOnly;
   penCb.addEventListener('change', () => { fin.penOnly = penCb.checked; });
+  // せんの ふとさ：ボタンに その ふとさの せんを みせる。えらぶと すぐ かきなおして ほぞん
+  const wBtns = GLYPH_W.map(([w, t]) => el('button', { class: 'btn gw', 'data-w': w, 'aria-label': 'せんの ふとさ ' + t, onclick: () => { fin.weight = w; saveDB(); markW(); paint(); } },
+    el('span', { class: 'gwline', style: `height:${Math.round(w * 80)}px`, 'aria-hidden': 'true' }), t));
+  const markW = () => wBtns.forEach(b => { const on = +b.dataset.w === glyphW(); b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+  markW();
   const bar = el('div', { class: 'padbar' },
     el('div', { class: 'regtitle' }, el('span', { class: 'ch' }, ch), el('span', { class: 'hint' }, `${idx + 1}もじめ ／ ${list.length}もじ${queue ? '（いまの ぶんしょうの もじ）' : ''}${note ? '　' + note : ''}`)),
     el('div', { class: 'row' },
@@ -90,6 +98,7 @@ function openReg(ch, queue) {
       el('button', { class: 'btn', onclick: () => { strokes.pop(); paint(); } }, '↶ もどす'),
       el('button', { class: 'btn', onclick: () => { strokes = []; paint(); } }, 'この もじを けす'),
       el('button', { class: 'btn', onclick: () => speak(ch) }, '🔊'),
+      el('span', { class: 'gwrow', role: 'group', 'aria-label': 'せんの ふとさ' }, ...wBtns),
       el('label', { class: 'hint tonly' }, modelCb, ' おてほん'),
       el('label', { class: 'hint tonly' }, penCb, ' ゆびでは かかない（ペンで かく）'),
       el('button', { class: 'btn', onclick: () => { save(); m.remove(); renderGlyphGrid(); } }, '✓ おわる')));

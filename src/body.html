@@ -263,6 +263,10 @@ button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-vis
 @keyframes starfade{0%,70%{opacity:1}100%{opacity:0}}
 @media (prefers-reduced-motion:reduce){.starpop{animation:starfade 1.2s linear 1 forwards;transform:translateX(-50%)}}
 @media print{.starpop{display:none!important}}
+/* ===== もじとうろくの せんの ふとさ（2026-11-05）：ボタンに その ふとさの せんを みせる ===== */
+.gwrow{display:inline-flex;gap:6px;flex-wrap:wrap}
+.btn.gw{display:inline-flex;align-items:center;gap:6px}
+.gwline{display:inline-block;width:22px;border-radius:99px;background:var(--pen,#2a2a2a)}
 </style>
 
 <header class="top">
