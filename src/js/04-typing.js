@@ -269,13 +269,13 @@ function renderKB() {
 function renderKB0() {
   const kb = $('#kb'); kb.innerHTML = '';
   if (KANA_MODE()) return renderKanaKB(kb);
-  const nk = S().guide === 2 && !ty.done ? nextKey() : null;
+  // つぎに うつ キーは ひからせない（こんちゃん 2026-11-05）。ヒントは もじの うえ・1もじ おおきく だす で だす
   KB_ROWS.forEach((row, ri) => {
     const r = el('div', { class: 'kr' });
     if (ri === 2) r.append(el('div', { style: 'flex:.6 1 0' }));
     row.forEach(k => {
       if (k === 'SCRIPT') { if (scriptKeyOn()) r.append(fnKey(k, 'あ⇄ア', SCRIPT_ARIA, toggleScript)); return; }
-      let cls = 'key' + (k === ' ' ? ' space' : '') + (k === nk ? ' next' : '');
+      let cls = 'key' + (k === ' ' ? ' space' : '');
       if (S().finger && FINGER[k] !== undefined) cls += ' f' + FINGER[k];
       const b = el('button', { class: cls, 'data-k': k, 'aria-label': KEY_SHOW[k] || k }, keyLabel(k));
       b.addEventListener('pointerdown', e => { e.preventDefault(); b._pd = Date.now(); press(k); });
@@ -288,8 +288,8 @@ function renderKB0() {
   });
 }
 // うつ もじでは ない キー（きりかえ）
-function fnKey(k, lab, aria, fn, on) {
-  const b = el('button', { class: 'key fn' + (on ? ' next' : ''), 'data-k': k, 'aria-label': aria }, lab);
+function fnKey(k, lab, aria, fn) {
+  const b = el('button', { class: 'key fn', 'data-k': k, 'aria-label': aria }, lab);
   b.addEventListener('pointerdown', e => { e.preventDefault(); b._pd = Date.now(); fn(); });
   b.addEventListener('click', () => { if (b._pd) { b._pd = 0; return; } fn(); });
   return b;
@@ -385,23 +385,21 @@ function renderBigKana(b, u) {
 // せまい がめんでは みじかい なまえ（CSS で きりかえ）
 const twoLab = (l, sh) => el('span', {}, el('span', { class: 'lg' }, l), el('span', { class: 'sm' }, sh));
 function renderKanaKB(kb) {
-  const nk = S().guide === 2 ? nextKeyKana() : null;
-  // つぎの もじが いまの ばんに ない ときは「123／あいう」キーを ひからせる
-  const numNeed = nk != null && isDigit(nk) !== !!ty.num;
+  // つぎに うつ キー・「123／あいう」キーは ひからせない（こんちゃん 2026-11-05）
   const grid = el('div', { class: 'kkb' });
   const side = list => { const c = el('div', { class: 'kcol side' }); list.forEach(b => c.append(b || el('div', { class: 'key ghost' }))); return c; };
   // ひだりの きりかえ（うえから すうじ・カタカナ・ひらがな）。いまの ばんの キーは おした かたち（on）
   const setScript = sc => { ty.num = false; if ((sc === 'kata') !== KATA()) toggleScript(); else renderKB(); };
   const cur = ty.num ? 'num' : KATA() ? 'kata' : 'hira';
-  const sw = (k, lab, aria, fn, want) => { const b = fnKey(k, lab, aria, fn, numNeed && want); b.classList.toggle('on', cur === k.toLowerCase()); b.setAttribute('aria-pressed', cur === k.toLowerCase() ? 'true' : 'false'); return b; };
+  const sw = (k, lab, aria, fn) => { const b = fnKey(k, lab, aria, fn); b.classList.toggle('on', cur === k.toLowerCase()); b.setAttribute('aria-pressed', cur === k.toLowerCase() ? 'true' : 'false'); return b; };
   // せんせいが きりかえキーを けして いる ときは、いまの もじの キーだけ（すうじから もどる ため）
   const showSc = sc => scriptKeyOn() || (sc === 'kata') === KATA();
-  grid.append(side([sw('NUM', '123', 'すうじ', () => { ty.num = true; renderKB(); }, !ty.num),
-    showSc('kata') ? sw('KATA', twoLab('カタカナ', 'カナ'), 'カタカナ', () => setScript('kata'), ty.num && KATA()) : null,
-    showSc('hira') ? sw('HIRA', twoLab('ひらがな', 'かな'), 'ひらがな', () => setScript('hira'), ty.num && !KATA()) : null, null, null]));
+  grid.append(side([sw('NUM', '123', 'すうじ', () => { ty.num = true; renderKB(); }),
+    showSc('kata') ? sw('KATA', twoLab('カタカナ', 'カナ'), 'カタカナ', () => setScript('kata')) : null,
+    showSc('hira') ? sw('HIRA', twoLab('ひらがな', 'かな'), 'ひらがな', () => setScript('hira')) : null, null, null]));
   const keyBtn = k => {
     const lab = k === 'MOD' ? '小゛゜' : dsp(k);
-    const b = el('button', { class: 'key' + (k === 'MOD' ? ' fn' : '') + (k === nk ? ' next' : ''), 'data-k': k, 'aria-label': lab }, lab);
+    const b = el('button', { class: 'key' + (k === 'MOD' ? ' fn' : ''), 'data-k': k, 'aria-label': lab }, lab);
     b.addEventListener('pointerdown', e => { e.preventDefault(); b._pd = Date.now(); press(k); });
     // そとづけ キーボード・VoiceOver・スイッチコントロールの「けってい」でも おせる
     b.addEventListener('click', () => { if (b._pd) { b._pd = 0; return; } press(k); });
@@ -414,7 +412,7 @@ function renderKanaKB(kb) {
     grid.append(c);
   });
   // くうはく：iPad と おなじ みぎがわ
-  const sp = el('button', { class: 'key fn space' + (nk === ' ' ? ' next' : ''), 'data-k': ' ', 'aria-label': 'くうはく' }, twoLab('くうはく', '␣'));
+  const sp = el('button', { class: 'key fn space', 'data-k': ' ', 'aria-label': 'くうはく' }, twoLab('くうはく', '␣'));
   sp.addEventListener('pointerdown', e => { e.preventDefault(); sp._pd = Date.now(); press(' '); });
   sp.addEventListener('click', () => { if (sp._pd) { sp._pd = 0; return; } press(' '); });
   grid.append(side([null, sp, null, null, null]));

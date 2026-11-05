@@ -358,7 +358,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-vis
       <label class="hint">うちかた <select id="optInput"><option value="kana">ひらがな（iPadの はいれつ）</option><option value="roma">ローマじ</option></select></label>
       <label class="hint" id="lblFinger"><input type="checkbox" id="optFinger"> ゆびの いろ</label>
       <label class="hint">ガイド
-        <select id="optGuide"><option value="2">ヒント＋キーを ひからせる</option><option value="1">ヒントだけ</option><option value="0">なし</option></select></label>
+        <select id="optGuide"><option value="1">ヒント</option><option value="0">なし</option></select></label>
       <label class="hint">くぎり <select id="optChunk"><option value="auto">1ぶん（ながい ときは「、」まで）</option><option value="ten">いつも「、」「。」まで</option><option value="sent">1ぶんずつ</option><option value="all">ぜんぶ いっきに</option></select></label>
       <button class="btn small" id="btnCuts">✂ くぎりを なおす</button>
       <label class="hint">つぎへの すすみかた <select id="optAdvance"><option value="auto09">すぐ じどうで（0.9びょう）</option><option value="auto2">ゆっくり じどうで（2びょう）</option><option value="manual">じぶんで「つぎへ」を おす</option></select></label>
@@ -516,7 +516,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-vis
   <div id="printArea"></div>
 </main>
 <!-- 更新日: アプリを直したら、ここの日付を書きかえる（最新版が反映されたかの目印。せんせいモードだけ表示） -->
-<div class="app-version tonly">更新日 2026-11-03</div>
+<div class="app-version tonly">更新日 2026-11-05</div>
 
 <script>
 // ===== 共通 =====
@@ -623,7 +623,7 @@ document.addEventListener('compositionend', dropKanji, true);
 // ===== 保存（localStorage） =====
 const STORE_KEY = 'bunshoMaker.v1';
 let DB;
-const DEF_SET = { romaji: 'kunrei', guide: 2, finger: false, sound: 'beep', keyCase: 'lower', glyphModel: true, input: 'kana', showBig: false, chunk: 'auto', speakPick: true, advance: 'auto09', script: 'hira', scriptKey: true };
+const DEF_SET = { romaji: 'kunrei', guide: 1, finger: false, sound: 'beep', keyCase: 'lower', glyphModel: true, input: 'kana', showBig: false, chunk: 'auto', speakPick: true, advance: 'auto09', script: 'hira', scriptKey: true };
 const S = () => P().settings || (P().settings = Object.assign({}, DEF_SET));
 function newProfile(name) {
   return { id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name, glyphs: {}, words: {}, doc: [], works: [] };
@@ -1473,13 +1473,13 @@ function renderKB() {
 function renderKB0() {
   const kb = $('#kb'); kb.innerHTML = '';
   if (KANA_MODE()) return renderKanaKB(kb);
-  const nk = S().guide === 2 && !ty.done ? nextKey() : null;
+  // つぎに うつ キーは ひからせない（こんちゃん 2026-11-05）。ヒントは もじの うえ・1もじ おおきく だす で だす
   KB_ROWS.forEach((row, ri) => {
     const r = el('div', { class: 'kr' });
     if (ri === 2) r.append(el('div', { style: 'flex:.6 1 0' }));
     row.forEach(k => {
       if (k === 'SCRIPT') { if (scriptKeyOn()) r.append(fnKey(k, 'あ⇄ア', SCRIPT_ARIA, toggleScript)); return; }
-      let cls = 'key' + (k === ' ' ? ' space' : '') + (k === nk ? ' next' : '');
+      let cls = 'key' + (k === ' ' ? ' space' : '');
       if (S().finger && FINGER[k] !== undefined) cls += ' f' + FINGER[k];
       const b = el('button', { class: cls, 'data-k': k, 'aria-label': KEY_SHOW[k] || k }, keyLabel(k));
       b.addEventListener('pointerdown', e => { e.preventDefault(); b._pd = Date.now(); press(k); });
@@ -1492,8 +1492,8 @@ function renderKB0() {
   });
 }
 // うつ もじでは ない キー（きりかえ）
-function fnKey(k, lab, aria, fn, on) {
-  const b = el('button', { class: 'key fn' + (on ? ' next' : ''), 'data-k': k, 'aria-label': aria }, lab);
+function fnKey(k, lab, aria, fn) {
+  const b = el('button', { class: 'key fn', 'data-k': k, 'aria-label': aria }, lab);
   b.addEventListener('pointerdown', e => { e.preventDefault(); b._pd = Date.now(); fn(); });
   b.addEventListener('click', () => { if (b._pd) { b._pd = 0; return; } fn(); });
   return b;
@@ -1589,23 +1589,21 @@ function renderBigKana(b, u) {
 // せまい がめんでは みじかい なまえ（CSS で きりかえ）
 const twoLab = (l, sh) => el('span', {}, el('span', { class: 'lg' }, l), el('span', { class: 'sm' }, sh));
 function renderKanaKB(kb) {
-  const nk = S().guide === 2 ? nextKeyKana() : null;
-  // つぎの もじが いまの ばんに ない ときは「123／あいう」キーを ひからせる
-  const numNeed = nk != null && isDigit(nk) !== !!ty.num;
+  // つぎに うつ キー・「123／あいう」キーは ひからせない（こんちゃん 2026-11-05）
   const grid = el('div', { class: 'kkb' });
   const side = list => { const c = el('div', { class: 'kcol side' }); list.forEach(b => c.append(b || el('div', { class: 'key ghost' }))); return c; };
   // ひだりの きりかえ（うえから すうじ・カタカナ・ひらがな）。いまの ばんの キーは おした かたち（on）
   const setScript = sc => { ty.num = false; if ((sc === 'kata') !== KATA()) toggleScript(); else renderKB(); };
   const cur = ty.num ? 'num' : KATA() ? 'kata' : 'hira';
-  const sw = (k, lab, aria, fn, want) => { const b = fnKey(k, lab, aria, fn, numNeed && want); b.classList.toggle('on', cur === k.toLowerCase()); b.setAttribute('aria-pressed', cur === k.toLowerCase() ? 'true' : 'false'); return b; };
+  const sw = (k, lab, aria, fn) => { const b = fnKey(k, lab, aria, fn); b.classList.toggle('on', cur === k.toLowerCase()); b.setAttribute('aria-pressed', cur === k.toLowerCase() ? 'true' : 'false'); return b; };
   // せんせいが きりかえキーを けして いる ときは、いまの もじの キーだけ（すうじから もどる ため）
   const showSc = sc => scriptKeyOn() || (sc === 'kata') === KATA();
-  grid.append(side([sw('NUM', '123', 'すうじ', () => { ty.num = true; renderKB(); }, !ty.num),
-    showSc('kata') ? sw('KATA', twoLab('カタカナ', 'カナ'), 'カタカナ', () => setScript('kata'), ty.num && KATA()) : null,
-    showSc('hira') ? sw('HIRA', twoLab('ひらがな', 'かな'), 'ひらがな', () => setScript('hira'), ty.num && !KATA()) : null, null, null]));
+  grid.append(side([sw('NUM', '123', 'すうじ', () => { ty.num = true; renderKB(); }),
+    showSc('kata') ? sw('KATA', twoLab('カタカナ', 'カナ'), 'カタカナ', () => setScript('kata')) : null,
+    showSc('hira') ? sw('HIRA', twoLab('ひらがな', 'かな'), 'ひらがな', () => setScript('hira')) : null, null, null]));
   const keyBtn = k => {
     const lab = k === 'MOD' ? '小゛゜' : dsp(k);
-    const b = el('button', { class: 'key' + (k === 'MOD' ? ' fn' : '') + (k === nk ? ' next' : ''), 'data-k': k, 'aria-label': lab }, lab);
+    const b = el('button', { class: 'key' + (k === 'MOD' ? ' fn' : ''), 'data-k': k, 'aria-label': lab }, lab);
     b.addEventListener('pointerdown', e => { e.preventDefault(); b._pd = Date.now(); press(k); });
     // そとづけ キーボード・VoiceOver・スイッチコントロールの「けってい」でも おせる
     b.addEventListener('click', () => { if (b._pd) { b._pd = 0; return; } press(k); });
@@ -1618,7 +1616,7 @@ function renderKanaKB(kb) {
     grid.append(c);
   });
   // くうはく：iPad と おなじ みぎがわ
-  const sp = el('button', { class: 'key fn space' + (nk === ' ' ? ' next' : ''), 'data-k': ' ', 'aria-label': 'くうはく' }, twoLab('くうはく', '␣'));
+  const sp = el('button', { class: 'key fn space', 'data-k': ' ', 'aria-label': 'くうはく' }, twoLab('くうはく', '␣'));
   sp.addEventListener('pointerdown', e => { e.preventDefault(); sp._pd = Date.now(); press(' '); });
   sp.addEventListener('click', () => { if (sp._pd) { sp._pd = 0; return; } press(' '); });
   grid.append(side([null, sp, null, null, null]));
@@ -2685,7 +2683,7 @@ function cleanShow(v) {
 function cleanSettings(v) {
   const o = obj(v), d = DEF_SET;
   return {
-    romaji: pick(o.romaji, ['kunrei', 'hepburn'], d.romaji), guide: pick(o.guide, [0, 1, 2], d.guide), finger: bool(o.finger, d.finger), sound: pick(o.sound === true ? 'beep' : o.sound === false ? 'off' : o.sound, ['beep', 'voice', 'off'], d.sound),
+    romaji: pick(o.romaji, ['kunrei', 'hepburn'], d.romaji), guide: pick(o.guide === 2 ? 1 : o.guide, [0, 1], d.guide), finger: bool(o.finger, d.finger), sound: pick(o.sound === true ? 'beep' : o.sound === false ? 'off' : o.sound, ['beep', 'voice', 'off'], d.sound),
     keyCase: pick(o.keyCase, ['lower', 'upper'], d.keyCase), glyphModel: bool(o.glyphModel, d.glyphModel), input: pick(o.input, ['kana', 'roma'], d.input),
     showBig: bool(o.showBig, d.showBig), chunk: pick(o.chunk, ['auto', 'ten', 'sent', 'all'], d.chunk), speakPick: bool(o.speakPick, d.speakPick),
     advance: pick(o.advance, ['auto09', 'auto2', 'manual'], d.advance), script: pick(o.script, ['hira', 'kata'], d.script), scriptKey: bool(o.scriptKey, d.scriptKey), show: cleanShow(o.show),
